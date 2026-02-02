@@ -12,6 +12,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-functions-compat.js"></script>
   <style>
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -42,28 +43,15 @@
     const db = firebase.firestore();
 
     // =============================================================================
-    // EMAIL CONFIGURATION (via Vercel Serverless Function)
+    // EMAIL CONFIGURATION (via Firebase Cloud Function)
     // =============================================================================
     
-    // Send email via Vercel serverless function
+    // Send email via Firebase Cloud Function
     const sendEmail = async ({ to, subject, html }) => {
       try {
-        const response = await fetch('/api/send-email', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ to, subject, html }),
-        });
-        
-        if (!response.ok) {
-          const error = await response.json();
-          console.error('Email send error:', error);
-          return { success: false, error };
-        }
-        
-        const data = await response.json();
-        return { success: true, data };
+        const sendEmailFunction = firebase.functions().httpsCallable('sendEmail');
+        const result = await sendEmailFunction({ to, subject, html });
+        return { success: true, data: result.data };
       } catch (error) {
         console.error('Email send error:', error);
         return { success: false, error };
