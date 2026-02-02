@@ -153,6 +153,192 @@
           </div>
         `,
       }),
+
+      dailyTargetHit: (userEmail, userName, dailyPnL, dailyTarget) => ({
+        to: userEmail,
+        subject: `🎯 Daily Target Hit! +${dailyPnL.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #1e40af; margin: 0;">Trading Journal</h1>
+            </div>
+            <div style="text-align: center; margin-bottom: 20px;">
+              <span style="font-size: 48px;">🎯</span>
+            </div>
+            <h2 style="color: #059669; text-align: center;">Daily Target Hit!</h2>
+            <p style="color: #4b5563; font-size: 16px; line-height: 1.6; text-align: center;">
+              Congratulations, <strong>${userName}</strong>! You crushed your daily target today!
+            </p>
+            <div style="background: linear-gradient(135deg, #059669 0%, #10b981 100%); border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
+              <p style="color: rgba(255,255,255,0.8); margin: 0 0 8px 0; font-size: 14px;">Today's P&L</p>
+              <p style="color: white; font-size: 36px; font-weight: bold; margin: 0;">+${dailyPnL.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+              <p style="color: rgba(255,255,255,0.8); margin: 8px 0 0 0; font-size: 14px;">Target: ${dailyTarget.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+            </div>
+            <p style="color: #4b5563; font-size: 16px; line-height: 1.6; text-align: center;">
+              Keep up the great work! Consistency is key to long-term trading success.
+            </p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="https://ohyaatradingjournal.com" 
+                 style="background-color: #059669; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                View Your Dashboard
+              </a>
+            </div>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+              © ${new Date().getFullYear()} Trading Journal. All rights reserved.
+            </p>
+          </div>
+        `,
+      }),
+
+      weeklyRecap: (userEmail, userName, stats) => ({
+        to: userEmail,
+        subject: `📊 Your Weekly Trading Recap - ${stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #1e40af; margin: 0;">Trading Journal</h1>
+            </div>
+            <h2 style="color: #1f2937; text-align: center;">Weekly Trading Recap 📊</h2>
+            <p style="color: #4b5563; font-size: 16px; line-height: 1.6; text-align: center;">
+              Hey ${userName}, here's how your week went!
+            </p>
+            
+            <!-- Main P&L Card -->
+            <div style="background: ${stats.totalPnL >= 0 ? 'linear-gradient(135deg, #059669 0%, #10b981 100%)' : 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'}; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
+              <p style="color: rgba(255,255,255,0.8); margin: 0 0 8px 0; font-size: 14px;">Week's P&L</p>
+              <p style="color: white; font-size: 36px; font-weight: bold; margin: 0;">${stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+            </div>
+
+            <!-- Stats Grid -->
+            <div style="display: table; width: 100%; margin: 24px 0;">
+              <div style="display: table-row;">
+                <div style="display: table-cell; width: 50%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Total Trades</p>
+                    <p style="color: #1f2937; font-size: 24px; font-weight: bold; margin: 0;">${stats.totalTrades}</p>
+                  </div>
+                </div>
+                <div style="display: table-cell; width: 50%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Win Rate</p>
+                    <p style="color: #1f2937; font-size: 24px; font-weight: bold; margin: 0;">${stats.winRate}%</p>
+                  </div>
+                </div>
+              </div>
+              <div style="display: table-row;">
+                <div style="display: table-cell; width: 50%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Wins / Losses</p>
+                    <p style="color: #1f2937; font-size: 24px; font-weight: bold; margin: 0;"><span style="color: #059669;">${stats.wins}W</span> / <span style="color: #dc2626;">${stats.losses}L</span></p>
+                  </div>
+                </div>
+                <div style="display: table-cell; width: 50%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Best Trade</p>
+                    <p style="color: #059669; font-size: 24px; font-weight: bold; margin: 0;">+${stats.bestTrade.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="https://ohyaatradingjournal.com" 
+                 style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                View Full Report
+              </a>
+            </div>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+              © ${new Date().getFullYear()} Trading Journal. All rights reserved.
+            </p>
+          </div>
+        `,
+      }),
+
+      monthlyReport: (userEmail, userName, stats) => ({
+        to: userEmail,
+        subject: `📈 Your ${stats.monthName} Trading Report - ${stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+            <div style="text-align: center; margin-bottom: 30px;">
+              <h1 style="color: #1e40af; margin: 0;">Trading Journal</h1>
+            </div>
+            <h2 style="color: #1f2937; text-align: center;">${stats.monthName} Performance Report 📈</h2>
+            <p style="color: #4b5563; font-size: 16px; line-height: 1.6; text-align: center;">
+              Hey ${userName}, here's your monthly breakdown!
+            </p>
+            
+            <!-- Main P&L Card -->
+            <div style="background: ${stats.totalPnL >= 0 ? 'linear-gradient(135deg, #059669 0%, #10b981 100%)' : 'linear-gradient(135deg, #dc2626 0%, #ef4444 100%)'}; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;">
+              <p style="color: rgba(255,255,255,0.8); margin: 0 0 8px 0; font-size: 14px;">${stats.monthName} P&L</p>
+              <p style="color: white; font-size: 36px; font-weight: bold; margin: 0;">${stats.totalPnL >= 0 ? '+' : ''}${stats.totalPnL.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+              ${stats.yearlyGoal ? `<p style="color: rgba(255,255,255,0.8); margin: 8px 0 0 0; font-size: 14px;">${stats.goalProgress}% of yearly goal</p>` : ''}
+            </div>
+
+            <!-- Stats Grid -->
+            <div style="display: table; width: 100%; margin: 24px 0;">
+              <div style="display: table-row;">
+                <div style="display: table-cell; width: 33%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Total Trades</p>
+                    <p style="color: #1f2937; font-size: 20px; font-weight: bold; margin: 0;">${stats.totalTrades}</p>
+                  </div>
+                </div>
+                <div style="display: table-cell; width: 33%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Win Rate</p>
+                    <p style="color: #1f2937; font-size: 20px; font-weight: bold; margin: 0;">${stats.winRate}%</p>
+                  </div>
+                </div>
+                <div style="display: table-cell; width: 33%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Trading Days</p>
+                    <p style="color: #1f2937; font-size: 20px; font-weight: bold; margin: 0;">${stats.tradingDays}</p>
+                  </div>
+                </div>
+              </div>
+              <div style="display: table-row;">
+                <div style="display: table-cell; width: 33%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Best Day</p>
+                    <p style="color: #059669; font-size: 20px; font-weight: bold; margin: 0;">+${stats.bestDay.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+                  </div>
+                </div>
+                <div style="display: table-cell; width: 33%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Worst Day</p>
+                    <p style="color: #dc2626; font-size: 20px; font-weight: bold; margin: 0;">${stats.worstDay.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+                  </div>
+                </div>
+                <div style="display: table-cell; width: 33%; padding: 8px;">
+                  <div style="background: #f3f4f6; border-radius: 8px; padding: 16px; text-align: center;">
+                    <p style="color: #6b7280; margin: 0 0 4px 0; font-size: 12px;">Avg/Day</p>
+                    <p style="color: ${stats.avgPerDay >= 0 ? '#059669' : '#dc2626'}; font-size: 20px; font-weight: bold; margin: 0;">${stats.avgPerDay >= 0 ? '+' : ''}${stats.avgPerDay.toLocaleString('en-US', { style: 'currency', currency: 'USD' })}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            ${stats.topSetup ? `
+            <div style="background: #eff6ff; border-radius: 8px; padding: 16px; margin: 24px 0;">
+              <p style="color: #1e40af; margin: 0; font-weight: bold;">🏆 Top Performing Setup: ${stats.topSetup}</p>
+            </div>
+            ` : ''}
+
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="https://ohyaatradingjournal.com" 
+                 style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                View Full Report
+              </a>
+            </div>
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+            <p style="color: #9ca3af; font-size: 12px; text-align: center;">
+              © ${new Date().getFullYear()} Trading Journal. All rights reserved.
+            </p>
+          </div>
+        `,
+      }),
     };
 
     // =============================================================================
@@ -8599,10 +8785,49 @@
         return () => unsubscribe();
       }, [user]);
 
+      // Check if daily target was hit and send email
+      const checkDailyTargetAndNotify = async (newState, oldState, userProfile) => {
+        if (!userProfile?.email || !newState.yearlyGoal?.target) return;
+
+        const today = new Date().toISOString().split('T')[0];
+        const dailyTarget = newState.yearlyGoal.target / 252; // 252 trading days
+
+        // Calculate today's P&L from new state
+        const todayTrades = newState.trades.filter(t => t.entryDate === today);
+        const todayPnL = todayTrades.reduce((sum, t) => {
+          const derived = calcTradeDerived(t);
+          return sum + (derived.pnlFinal || 0);
+        }, 0);
+
+        // Calculate today's P&L from old state
+        const oldTodayTrades = (oldState?.trades || []).filter(t => t.entryDate === today);
+        const oldTodayPnL = oldTodayTrades.reduce((sum, t) => {
+          const derived = calcTradeDerived(t);
+          return sum + (derived.pnlFinal || 0);
+        }, 0);
+
+        // Check if we just crossed the daily target (wasn't hit before, is hit now)
+        const wasHit = oldTodayPnL >= dailyTarget;
+        const isHit = todayPnL >= dailyTarget;
+
+        if (!wasHit && isHit) {
+          // Daily target just hit! Send email
+          const emailData = emailTemplates.dailyTargetHit(
+            userProfile.email,
+            userProfile.displayName,
+            todayPnL,
+            dailyTarget
+          );
+          await sendEmail(emailData);
+          console.log('Daily target hit email sent!');
+        }
+      };
+
       // Save journal state to Firestore
       const saveJournalState = async (newState) => {
         if (!user) return;
 
+        const oldState = journalState;
         setJournalState(newState);
 
         try {
@@ -8611,6 +8836,12 @@
             .collection('journalData')
             .doc('state')
             .set(newState, { merge: true });
+          
+          // Check if daily target was hit (only if trades changed)
+          if (newState.trades?.length !== oldState?.trades?.length || 
+              JSON.stringify(newState.trades) !== JSON.stringify(oldState?.trades)) {
+            checkDailyTargetAndNotify(newState, oldState, userProfile);
+          }
           // Save successful - no alert needed
         } catch (error) {
           console.error('Failed to save to Firestore:', error);
