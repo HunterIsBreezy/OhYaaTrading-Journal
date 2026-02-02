@@ -8798,6 +8798,11 @@
 
       // Check if daily target was hit and send email
       const checkDailyTargetAndNotify = async (newState, oldState, userProfile) => {
+        console.log('Checking daily target...', { 
+          hasEmail: !!userProfile?.email, 
+          hasGoal: !!newState.yearlyGoal?.target 
+        });
+        
         if (!userProfile?.email || !newState.yearlyGoal?.target) return;
 
         const today = new Date().toISOString().split('T')[0];
@@ -8817,12 +8822,17 @@
           return sum + (derived.pnlFinal || 0);
         }, 0);
 
+        console.log('Daily target check:', { today, dailyTarget, todayPnL, oldTodayPnL });
+
         // Check if we just crossed the daily target (wasn't hit before, is hit now)
         const wasHit = oldTodayPnL >= dailyTarget;
         const isHit = todayPnL >= dailyTarget;
 
+        console.log('Target status:', { wasHit, isHit });
+
         if (!wasHit && isHit) {
           // Daily target just hit! Send email
+          console.log('Sending daily target hit email!');
           const emailData = emailTemplates.dailyTargetHit(
             userProfile.email,
             userProfile.displayName,
