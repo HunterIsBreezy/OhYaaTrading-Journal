@@ -8844,6 +8844,11 @@
         }
       };
 
+      // Sanitize state to remove any functions (Firestore can't store functions)
+      const sanitizeForFirestore = (obj) => {
+        return JSON.parse(JSON.stringify(obj));
+      };
+
       // Save journal state to Firestore
       const saveJournalState = async (newState) => {
         if (!user) return;
@@ -8852,11 +8857,14 @@
         setJournalState(newState);
 
         try {
+          // Sanitize state to remove any functions before saving
+          const cleanState = sanitizeForFirestore(newState);
+          
           await db.collection('users')
             .doc(user.uid)
             .collection('journalData')
             .doc('state')
-            .set(newState, { merge: true });
+            .set(cleanState, { merge: true });
           
           // Check if daily target was hit (only if trades changed)
           if (newState.trades?.length !== oldState?.trades?.length || 
