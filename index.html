@@ -46,12 +46,23 @@
     // EMAIL CONFIGURATION (via Firebase Cloud Function)
     // =============================================================================
     
-    // Send email via Firebase Cloud Function
+    // Send email via Firebase Cloud Function (HTTP endpoint)
     const sendEmail = async ({ to, subject, html }) => {
       try {
-        const sendEmailFunction = firebase.functions().httpsCallable('sendEmail');
-        const result = await sendEmailFunction({ to, subject, html });
-        return { success: true, data: result.data };
+        const response = await fetch('https://us-central1-trading-journal-86e97.cloudfunctions.net/sendEmail', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ to, subject, html }),
+        });
+        
+        const data = await response.json();
+        if (!response.ok) {
+          console.error('Email send error:', data);
+          return { success: false, error: data };
+        }
+        return { success: true, data };
       } catch (error) {
         console.error('Email send error:', error);
         return { success: false, error };
