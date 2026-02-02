@@ -8845,16 +8845,24 @@
       };
 
       // Sanitize state to remove any functions and undefined values (Firestore can't store these)
-      const sanitizeForFirestore = (obj) => {
+      const sanitizeForFirestore = (obj, path = '') => {
         if (obj === null || obj === undefined) return null;
+        if (typeof obj === 'function') {
+          console.error('Found function at path:', path);
+          return null;
+        }
         if (typeof obj !== 'object') return obj;
         if (Array.isArray(obj)) {
-          return obj.map(item => sanitizeForFirestore(item)).filter(item => item !== undefined);
+          return obj.map((item, i) => sanitizeForFirestore(item, `${path}[${i}]`)).filter(item => item !== undefined);
         }
         const cleaned = {};
         for (const [key, value] of Object.entries(obj)) {
-          if (typeof value === 'function' || value === undefined) continue;
-          cleaned[key] = sanitizeForFirestore(value);
+          if (typeof value === 'function') {
+            console.error('Found function at path:', `${path}.${key}`);
+            continue;
+          }
+          if (value === undefined) continue;
+          cleaned[key] = sanitizeForFirestore(value, `${path}.${key}`);
         }
         return cleaned;
       };
@@ -8863,12 +8871,16 @@
       const saveJournalState = async (newState) => {
         if (!user) return;
 
+        // Debug: Check what's being passed in
+        console.log('saveJournalState called with:', typeof newState, newState);
+
         const oldState = journalState;
         setJournalState(newState);
 
         try {
           // Sanitize state to remove any functions before saving
-          const cleanState = sanitizeForFirestore(newState);
+          const cleanState = sanitizeForFirestore(newState, 'root');
+          console.log('Clean state:', cleanState);
           
           await db.collection('users')
             .doc(user.uid)
