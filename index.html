@@ -7180,7 +7180,7 @@
     // =============================================================================
     // PROFILE PAGE
     // =============================================================================
-    function ProfilePage({ state, setState, isMobile, userProfile, onSignOut, readOnly }) {
+    function ProfilePage({ state, setState, isMobile, userProfile, onSignOut, onUpdate, readOnly }) {
       const currentYear = new Date().getFullYear();
 
       // Calculate all-time stats
@@ -7371,9 +7371,39 @@
                       {userProfile.role === 'mentor' ? '👨‍🏫 Mentor' : '📈 Trader'}
                     </span>
                     {userProfile.mentorName && (
-                      <p className="text-sm text-gray-500 mt-1">
-                        Mentored by: <span className="font-medium">{userProfile.mentorName}</span>
-                      </p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <p className="text-sm text-gray-500">
+                          Mentored by: <span className="font-medium">{userProfile.mentorName}</span>
+                        </p>
+                        <button
+                          onClick={async () => {
+                            if (!confirm('Are you sure you want to disconnect from your mentor?')) return;
+                            try {
+                              // Remove mentor from trader's profile
+                              await db.collection('users').doc(userProfile.uid).update({
+                                mentorId: firebase.firestore.FieldValue.delete(),
+                                mentorName: firebase.firestore.FieldValue.delete(),
+                              });
+                              // Remove from mentor's mentee list
+                              if (userProfile.mentorId) {
+                                await db.collection('mentorships')
+                                  .doc(userProfile.mentorId)
+                                  .collection('mentees')
+                                  .doc(userProfile.uid)
+                                  .delete();
+                              }
+                              // Reload profile
+                              if (onUpdate) onUpdate();
+                            } catch (err) {
+                              console.error('Failed to remove mentor:', err);
+                              alert('Failed to remove mentor. Please try again.');
+                            }
+                          }}
+                          className="text-xs text-red-500 hover:text-red-700 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -8392,7 +8422,7 @@
                       )}
                       <button
                         onClick={() => removeMentee(mentee.id)}
-                        className="p-2 text-gray-400 hover:text-red-600"
+                        className="px-3 py-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
                         title="Remove mentee"
                       >
                         {Icons.trash}
@@ -8680,7 +8710,7 @@
           case 'mistakes':
             return <>{inviteBanner}<MistakesPage state={journalState} setState={saveJournalState} isMobile={isMobile} /></>;
           case 'profile':
-            return <>{inviteBanner}<ProfilePage state={journalState} setState={saveJournalState} isMobile={isMobile} userProfile={userProfile} onSignOut={handleSignOut} /></>;
+            return <>{inviteBanner}<ProfilePage state={journalState} setState={saveJournalState} isMobile={isMobile} userProfile={userProfile} onSignOut={handleSignOut} onUpdate={reloadProfile} /></>;
           case 'mentees':
             return <MenteesPage userProfile={userProfile} isMobile={isMobile} />;
           default:
