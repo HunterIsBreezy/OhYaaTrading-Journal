@@ -8844,9 +8844,19 @@
         }
       };
 
-      // Sanitize state to remove any functions (Firestore can't store functions)
+      // Sanitize state to remove any functions and undefined values (Firestore can't store these)
       const sanitizeForFirestore = (obj) => {
-        return JSON.parse(JSON.stringify(obj));
+        if (obj === null || obj === undefined) return null;
+        if (typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) {
+          return obj.map(item => sanitizeForFirestore(item)).filter(item => item !== undefined);
+        }
+        const cleaned = {};
+        for (const [key, value] of Object.entries(obj)) {
+          if (typeof value === 'function' || value === undefined) continue;
+          cleaned[key] = sanitizeForFirestore(value);
+        }
+        return cleaned;
       };
 
       // Save journal state to Firestore
