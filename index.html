@@ -8868,11 +8868,13 @@
       };
 
       // Save journal state to Firestore
-      const saveJournalState = async (newState) => {
+      const saveJournalState = async (newStateOrUpdater) => {
         if (!user) return;
 
-        // Debug: Check what's being passed in
-        console.log('saveJournalState called with:', typeof newState, newState);
+        // Handle both direct state and updater function patterns
+        const newState = typeof newStateOrUpdater === 'function' 
+          ? newStateOrUpdater(journalState) 
+          : newStateOrUpdater;
 
         const oldState = journalState;
         setJournalState(newState);
@@ -8880,7 +8882,11 @@
         try {
           // Sanitize state to remove any functions before saving
           const cleanState = sanitizeForFirestore(newState, 'root');
-          console.log('Clean state:', cleanState);
+          
+          if (!cleanState || typeof cleanState !== 'object') {
+            console.error('Invalid clean state:', cleanState);
+            return;
+          }
           
           await db.collection('users')
             .doc(user.uid)
