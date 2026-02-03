@@ -7369,9 +7369,16 @@
                 <h3 className="text-sm font-medium text-gray-700 mb-3">Active ({activeChallenges.length})</h3>
                 <div className="space-y-3">
                   {activeChallenges.map(challenge => (
-                    <div key={challenge.id} className="bg-gray-50 rounded-lg p-4">
+                    <div key={challenge.id} className={`rounded-lg p-4 ${challenge.fromMentor ? 'bg-purple-50 border border-purple-100' : 'bg-gray-50'}`}>
                       <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium text-gray-900">{challenge.name}</h4>
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-medium text-gray-900">{challenge.name}</h4>
+                          {challenge.fromMentor && (
+                            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 font-medium">
+                              From {challenge.mentorName || 'Mentor'}
+                            </span>
+                          )}
+                        </div>
                         <div className="flex items-center gap-2">
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                             challenge.progress >= 75 ? 'bg-emerald-100 text-emerald-700' :
@@ -7380,18 +7387,20 @@
                           }`}>
                             {challenge.statusText}
                           </span>
-                          <button
-                            onClick={() => deleteChallenge(challenge.id)}
-                            className="p-1 text-gray-400 hover:text-red-600"
-                          >
-                            {Icons.trash}
-                          </button>
+                          {!isReadOnly && !challenge.fromMentor && (
+                            <button
+                              onClick={() => deleteChallenge(challenge.id)}
+                              className="p-1 text-gray-400 hover:text-red-600"
+                            >
+                              {Icons.trash}
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
                         <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                           <div 
-                            className="h-full bg-blue-500 rounded-full transition-all"
+                            className={`h-full rounded-full transition-all ${challenge.fromMentor ? 'bg-purple-500' : 'bg-blue-500'}`}
                             style={{ width: `${challenge.progress}%` }}
                           />
                         </div>
@@ -7413,14 +7422,21 @@
                 <h3 className="text-sm font-medium text-emerald-700 mb-3">✅ Completed ({completedChallenges.length})</h3>
                 <div className="space-y-2">
                   {completedChallenges.map(challenge => (
-                    <div key={challenge.id} className="bg-emerald-50 rounded-lg p-3 flex items-center justify-between">
-                      <span className="text-sm text-emerald-800">{challenge.name}</span>
-                      <button
-                        onClick={() => deleteChallenge(challenge.id)}
-                        className="p-1 text-emerald-400 hover:text-red-600"
-                      >
-                        {Icons.trash}
-                      </button>
+                    <div key={challenge.id} className={`rounded-lg p-3 flex items-center justify-between ${challenge.fromMentor ? 'bg-purple-50' : 'bg-emerald-50'}`}>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-sm ${challenge.fromMentor ? 'text-purple-800' : 'text-emerald-800'}`}>{challenge.name}</span>
+                        {challenge.fromMentor && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-purple-100 text-purple-600">Mentor</span>
+                        )}
+                      </div>
+                      {!isReadOnly && !challenge.fromMentor && (
+                        <button
+                          onClick={() => deleteChallenge(challenge.id)}
+                          className="p-1 text-emerald-400 hover:text-red-600"
+                        >
+                          {Icons.trash}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -7434,13 +7450,20 @@
                 <div className="space-y-2">
                   {failedChallenges.map(challenge => (
                     <div key={challenge.id} className="bg-red-50 rounded-lg p-3 flex items-center justify-between">
-                      <span className="text-sm text-red-800">{challenge.name}</span>
-                      <button
-                        onClick={() => deleteChallenge(challenge.id)}
-                        className="p-1 text-red-400 hover:text-red-600"
-                      >
-                        {Icons.trash}
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-red-800">{challenge.name}</span>
+                        {challenge.fromMentor && (
+                          <span className="text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-600">Mentor</span>
+                        )}
+                      </div>
+                      {!isReadOnly && !challenge.fromMentor && (
+                        <button
+                          onClick={() => deleteChallenge(challenge.id)}
+                          className="p-1 text-red-400 hover:text-red-600"
+                        >
+                          {Icons.trash}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -10122,7 +10145,8 @@
         if (!selectedMentee?.id) return false;
 
         try {
-          await db.collection('users')
+          // Create the assignment
+          const assignmentRef = await db.collection('users')
             .doc(selectedMentee.id)
             .collection('assignments')
             .add({
@@ -10136,6 +10160,59 @@
               updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
               completedAt: null,
             });
+
+          // If assignment has a challenge, also add it to the mentee's challenges in journalState
+          if (assignmentData.hasChallenge && assignmentData.challenge) {
+            const challengeTypeLabels = {
+              profit: 'Profit Target',
+              winrate: 'Win Rate',
+              trades: 'Trade Count',
+              streak: 'Profitable Streak',
+              max_loss: 'Max Loss Limit',
+            };
+            
+            const challenge = {
+              id: generateId(),
+              assignmentId: assignmentRef.id, // Link back to assignment
+              fromMentor: true,
+              mentorName: userProfile.displayName,
+              name: `${assignmentData.title} (${challengeTypeLabels[assignmentData.challenge.type] || 'Challenge'})`,
+              type: assignmentData.challenge.type,
+              condition: assignmentData.challenge.type === 'winrate' ? 'win_rate' : 
+                        assignmentData.challenge.type === 'profit' ? 'by_date' :
+                        assignmentData.challenge.type === 'trades' ? 'in_trades' :
+                        assignmentData.challenge.type === 'streak' ? 'profitable_days' :
+                        assignmentData.challenge.type === 'max_loss' ? 'max_loss_days' : 'custom',
+              targetValue: assignmentData.challenge.type === 'profit' ? assignmentData.challenge.target : 0,
+              targetPercent: assignmentData.challenge.type === 'winrate' ? assignmentData.challenge.target : 0,
+              tradeLimit: assignmentData.challenge.tradesRequired || 0,
+              streakDays: assignmentData.challenge.type === 'streak' ? assignmentData.challenge.target : 0,
+              maxLossAmount: assignmentData.challenge.type === 'max_loss' ? assignmentData.challenge.target : 0,
+              endDate: assignmentData.challenge.endDate || assignmentData.dueDate || '',
+              startDate: todayISO(),
+              createdAt: nowISO(),
+            };
+
+            // Get current mentee journalState and add the challenge
+            const stateDoc = await db.collection('users')
+              .doc(selectedMentee.id)
+              .collection('journalData')
+              .doc('state')
+              .get();
+
+            const currentState = stateDoc.exists ? stateDoc.data() : { challenges: [] };
+            const updatedChallenges = [...(currentState.challenges || []), challenge];
+
+            await db.collection('users')
+              .doc(selectedMentee.id)
+              .collection('journalData')
+              .doc('state')
+              .set({
+                ...currentState,
+                challenges: updatedChallenges,
+              }, { merge: true });
+          }
+
           return true;
         } catch (err) {
           console.error('Failed to create assignment:', err);
@@ -10168,11 +10245,44 @@
         if (!selectedMentee?.id) return false;
 
         try {
+          // First get the assignment to check if it has a linked challenge
+          const assignmentDoc = await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('assignments')
+            .doc(assignmentId)
+            .get();
+          
+          const assignment = assignmentDoc.data();
+
+          // Delete the assignment
           await db.collection('users')
             .doc(selectedMentee.id)
             .collection('assignments')
             .doc(assignmentId)
             .delete();
+
+          // If it had a challenge, also remove from journalState
+          if (assignment?.hasChallenge) {
+            const stateDoc = await db.collection('users')
+              .doc(selectedMentee.id)
+              .collection('journalData')
+              .doc('state')
+              .get();
+
+            if (stateDoc.exists) {
+              const currentState = stateDoc.data();
+              const updatedChallenges = (currentState.challenges || []).filter(
+                c => c.assignmentId !== assignmentId
+              );
+
+              await db.collection('users')
+                .doc(selectedMentee.id)
+                .collection('journalData')
+                .doc('state')
+                .update({ challenges: updatedChallenges });
+            }
+          }
+
           return true;
         } catch (err) {
           console.error('Failed to delete assignment:', err);
