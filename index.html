@@ -11115,8 +11115,8 @@
         );
       }
 
-      // Build nav items based on role
-      const navItems = useMemo(() => {
+      // Build nav items based on role (computed, not a hook)
+      const getNavItems = () => {
         let items = [...NAV_ITEMS];
         
         // Add Assignments for mentees (users with a mentor)
@@ -11132,7 +11132,8 @@
         }
         
         return items;
-      }, [userProfile?.role, userProfile?.mentorId]);
+      };
+      const navItems = getNavItems();
 
       const renderPage = () => {
         // Show mentor invite banner for traders
