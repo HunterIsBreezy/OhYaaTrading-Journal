@@ -17,6 +17,8 @@
   <style>
     .no-scrollbar::-webkit-scrollbar { display: none; }
     .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
   </style>
 </head>
@@ -1882,7 +1884,7 @@
     // =============================================================================
     // DASHBOARD PAGE
     // =============================================================================
-    function DashboardPage({ state, setState, setActivePage, setSelectedDate, isMobile }) {
+    function DashboardPage({ state, setState, setActivePage, setSelectedDate, isMobile, isReadOnly = false }) {
       const [filter, setFilter] = useState('week');
       const [dailyNote, setDailyNote] = useState('');
       const [showDatePicker, setShowDatePicker] = useState(false);
@@ -2697,16 +2699,19 @@
               <p className="text-sm text-gray-500 mb-3">{today}</p>
               <textarea
                 value={dailyNote}
-                onChange={(e) => setDailyNote(e.target.value)}
-                placeholder="Jot down your thoughts for today..."
-                className="w-full flex-1 min-h-[280px] p-3 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={(e) => !isReadOnly && setDailyNote(e.target.value)}
+                placeholder={isReadOnly ? "No notes for today" : "Jot down your thoughts for today..."}
+                className={`w-full flex-1 min-h-[280px] p-3 border border-gray-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                readOnly={isReadOnly}
               />
-              <button
-                onClick={handleSaveDailyNote}
-                className="mt-3 w-full py-2 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                Save Note
-              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={handleSaveDailyNote}
+                  className="mt-3 w-full py-2 px-4 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                >
+                  Save Note
+                </button>
+              )}
             </div>
           </div>
 
@@ -3083,7 +3088,7 @@
     // =============================================================================
     // TRADE LOG PAGE
     // =============================================================================
-    function TradeLogPage({ state, setState, isMobile }) {
+    function TradeLogPage({ state, setState, isMobile, isReadOnly = false }) {
       const [modalOpen, setModalOpen] = useState(false);
       const [editingTrade, setEditingTrade] = useState(null);
       const [sortField, setSortField] = useState('entryDate');
@@ -3093,6 +3098,7 @@
       const [notesModalOpen, setNotesModalOpen] = useState(false);
       const [notesModalData, setNotesModalData] = useState({ notes: '', title: '' });
       const [showFilters, setShowFilters] = useState(false);
+      const [viewingTrade, setViewingTrade] = useState(null); // For read-only view modal
       
       // Filter state
       const [filters, setFilters] = useState({
@@ -3465,14 +3471,16 @@
           {/* Header */}
           <div className="flex items-center justify-between">
             <h1 className="text-xl md:text-2xl font-bold text-gray-900">Trade Log</h1>
-            <button
-              onClick={openAddModal}
-              className="flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-            >
-              {Icons.plus}
-              <span className="hidden sm:inline">Add Trade</span>
-              <span className="sm:hidden">Add</span>
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-1 md:gap-2 px-3 md:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+              >
+                {Icons.plus}
+                <span className="hidden sm:inline">Add Trade</span>
+                <span className="sm:hidden">Add</span>
+              </button>
+            )}
           </div>
 
           {/* Filters Toolbar */}
@@ -3811,14 +3819,20 @@
                       <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Screenshot
                       </th>
-                      <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
-                        Actions
-                      </th>
+                      {!isReadOnly && (
+                        <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                          Actions
+                        </th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-200">
                     {filteredTrades.map(trade => (
-                      <tr key={trade.id} className="hover:bg-gray-50">
+                      <tr 
+                        key={trade.id} 
+                        className={`hover:bg-gray-50 ${isReadOnly ? 'cursor-pointer' : ''}`}
+                        onClick={isReadOnly ? () => setViewingTrade(trade) : undefined}
+                      >
                         <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{trade.entryDate}</td>
                         <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{trade.ticker}</td>
                         <td className="px-4 py-3 text-sm text-gray-600 whitespace-nowrap">
@@ -3902,15 +3916,17 @@
                             <span className="text-gray-300">-</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 text-right whitespace-nowrap">
-                          <button
-                            onClick={() => openEditModal(trade)}
-                            className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                            title="Edit trade"
-                          >
-                            {Icons.edit}
-                          </button>
-                        </td>
+                        {!isReadOnly && (
+                          <td className="px-4 py-3 text-right whitespace-nowrap">
+                            <button
+                              onClick={() => openEditModal(trade)}
+                              className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                              title="Edit trade"
+                            >
+                              {Icons.edit}
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -3945,6 +3961,119 @@
             notes={notesModalData.notes}
             title={notesModalData.title}
           />
+
+          {/* Read-only Trade View Modal */}
+          {isReadOnly && viewingTrade && (
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+              <div className="fixed inset-0 bg-black/50" onClick={() => setViewingTrade(null)} />
+              <div className="relative min-h-screen flex items-start md:items-center justify-center p-2 md:p-4 pt-4">
+                <div className="relative bg-white rounded-xl shadow-xl w-full max-w-2xl max-h-[92vh] overflow-y-auto">
+                  {/* Header */}
+                  <div className="sticky top-0 bg-white border-b border-gray-200 px-4 md:px-6 py-3 md:py-4 flex items-center justify-between rounded-t-xl z-10">
+                    <div>
+                      <h2 className="text-lg md:text-xl font-semibold text-gray-900">
+                        {viewingTrade.ticker} - {viewingTrade.entryDate}
+                      </h2>
+                      <p className="text-sm text-gray-500">Trade Details (Read-Only)</p>
+                    </div>
+                    <button onClick={() => setViewingTrade(null)} className="p-2 hover:bg-gray-100 rounded-lg">
+                      {Icons.x}
+                    </button>
+                  </div>
+
+                  {/* Trade Details */}
+                  <div className="p-4 md:p-6 space-y-6">
+                    {/* P&L Banner */}
+                    <div className={`p-4 rounded-xl ${viewingTrade.derived?.pnlFinal >= 0 ? 'bg-emerald-50' : 'bg-red-50'}`}>
+                      <p className="text-sm text-gray-600 mb-1">P&L</p>
+                      <p className={`text-3xl font-bold ${viewingTrade.derived?.pnlFinal >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {viewingTrade.derived?.isOpen ? 'Open' : formatCurrency(viewingTrade.derived?.pnlFinal || 0)}
+                      </p>
+                    </div>
+
+                    {/* Trade Info Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Asset Type</p>
+                        <p className="font-medium">{ASSET_TYPES.find(a => a.id === viewingTrade.assetType)?.label || viewingTrade.assetType}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Position</p>
+                        <p className="font-medium capitalize">{viewingTrade.positionType}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Size</p>
+                        <p className="font-medium">{viewingTrade.positionSize}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Entry Price</p>
+                        <p className="font-medium">{viewingTrade.entryPrice != null ? `$${viewingTrade.entryPrice.toFixed(2)}` : '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Exit Date</p>
+                        <p className="font-medium">{viewingTrade.exitDate || '-'}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Exit Price</p>
+                        <p className="font-medium">{viewingTrade.exitPrice != null ? `$${viewingTrade.exitPrice.toFixed(2)}` : '-'}</p>
+                      </div>
+                    </div>
+
+                    {/* Setup & Mistakes */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Setup</p>
+                        <p className="font-medium">{getSetupName(viewingTrade.setupId)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Mistakes</p>
+                        <p className="font-medium">{getMistakeNames(viewingTrade.mistakeIds) || 'None'}</p>
+                      </div>
+                    </div>
+
+                    {/* Rating */}
+                    <div>
+                      <p className="text-xs text-gray-500 mb-1">Rating</p>
+                      <StarRating value={viewingTrade.rating || 0} readonly size="md" />
+                    </div>
+
+                    {/* Notes */}
+                    {viewingTrade.notes && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-1">Notes</p>
+                        <p className="text-gray-700 whitespace-pre-wrap bg-gray-50 p-3 rounded-lg">{viewingTrade.notes}</p>
+                      </div>
+                    )}
+
+                    {/* Screenshot */}
+                    {viewingTrade.screenshot && (
+                      <div>
+                        <p className="text-xs text-gray-500 mb-2">Screenshot</p>
+                        <img 
+                          src={viewingTrade.screenshot} 
+                          alt="Trade screenshot" 
+                          className="w-full rounded-lg border border-gray-200 cursor-pointer hover:opacity-90"
+                          onClick={() => {
+                            setImageModalData({ src: viewingTrade.screenshot, title: `${viewingTrade.ticker} - ${viewingTrade.entryDate}`, trade: viewingTrade });
+                            setImageModalOpen(true);
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {/* Mentor Feedback Placeholder */}
+                    <div className="border-t border-gray-200 pt-4">
+                      <p className="text-sm font-medium text-gray-700 mb-2">Mentor Feedback</p>
+                      <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-400 text-sm">
+                        <p>No feedback yet</p>
+                        <p className="text-xs mt-1">(Coming in Phase 2)</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
@@ -4102,7 +4231,7 @@
     // =============================================================================
     // CALENDAR PAGE
     // =============================================================================
-    function CalendarPage({ state, setState, selectedDate, setSelectedDate, isMobile }) {
+    function CalendarPage({ state, setState, selectedDate, setSelectedDate, isMobile, isReadOnly = false }) {
       const [viewDate, setViewDate] = useState(() => {
         if (selectedDate) {
           const [year, month] = selectedDate.split('-');
@@ -4670,6 +4799,7 @@
                   <textarea
                     value={dailyNote}
                     onChange={(e) => {
+                      if (isReadOnly) return;
                       setDailyNote(e.target.value);
                       // Auto-expand textarea
                       e.target.style.height = 'auto';
@@ -4680,16 +4810,19 @@
                       e.target.style.height = 'auto';
                       e.target.style.height = Math.max(150, e.target.scrollHeight) + 'px';
                     }}
-                    placeholder="Market conditions, trading plan, lessons learned, emotions..."
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 overflow-hidden"
+                    placeholder={isReadOnly ? "No notes for this date" : "Market conditions, trading plan, lessons learned, emotions..."}
+                    className={`w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 overflow-hidden ${isReadOnly ? 'bg-gray-50 cursor-not-allowed' : ''}`}
                     style={{ minHeight: '150px', resize: 'none' }}
+                    readOnly={isReadOnly}
                   />
-                  <button
-                    onClick={handleSaveNote}
-                    className="mt-2 w-full px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    Save Note
-                  </button>
+                  {!isReadOnly && (
+                    <button
+                      onClick={handleSaveNote}
+                      className="mt-2 w-full px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                      Save Note
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -4876,16 +5009,18 @@
                           : 'No trades yet'
                         }
                       </h3>
-                      <button
-                        onClick={() => {
-                          setEditingTrade({ entryDate: selectedDate });
-                          setModalOpen(true);
-                        }}
-                        className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
-                      >
-                        {Icons.plus}
-                        <span>Add Trade</span>
-                      </button>
+                      {!isReadOnly && (
+                        <button
+                          onClick={() => {
+                            setEditingTrade({ entryDate: selectedDate });
+                            setModalOpen(true);
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-xs font-medium"
+                        >
+                          {Icons.plus}
+                          <span>Add Trade</span>
+                        </button>
+                      )}
                     </div>
                     {selectedDateTrades.length > 0 ? (
                       <div className="overflow-x-auto">
@@ -4900,8 +5035,10 @@
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rating</th>
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Setup</th>
                               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Mistakes</th>
-                              <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Screenshot</th>
-                              <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                                <th className="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase">Screenshot</th>
+                              {!isReadOnly && (
+                                <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 uppercase">Actions</th>
+                              )}
                             </tr>
                           </thead>
                           <tbody className="divide-y divide-gray-200">
@@ -4959,14 +5096,16 @@
                                     <span className="text-gray-300 text-xs">—</span>
                                   )}
                                 </td>
-                                <td className="px-3 py-2 text-right">
-                                  <button
-                                    onClick={() => openEditModal(trade)}
-                                    className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                  >
-                                    {Icons.edit}
-                                  </button>
-                                </td>
+                                {!isReadOnly && (
+                                  <td className="px-3 py-2 text-right">
+                                    <button
+                                      onClick={() => openEditModal(trade)}
+                                      className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                    >
+                                      {Icons.edit}
+                                    </button>
+                                  </td>
+                                )}
                               </tr>
                             ))}
                           </tbody>
@@ -5143,7 +5282,7 @@
     // =============================================================================
     // SETUPS PAGE
     // =============================================================================
-    function SetupsPage({ state, setState, isMobile }) {
+    function SetupsPage({ state, setState, isMobile, isReadOnly = false }) {
       const [modalOpen, setModalOpen] = useState(false);
       const [editingSetup, setEditingSetup] = useState(null);
       const [setupName, setSetupName] = useState('');
@@ -5351,13 +5490,15 @@
               <h1 className="text-2xl font-bold text-gray-900">Setups</h1>
               <p className="text-sm text-gray-500 mt-1">{state.setups.length} setups defined</p>
             </div>
-            <button
-              onClick={openAddModal}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              {Icons.plus}
-              <span>Add Setup</span>
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                {Icons.plus}
+                <span>Add Setup</span>
+              </button>
+            )}
           </div>
 
           {/* Analytics Section */}
@@ -5565,22 +5706,24 @@
                         )}
                         
                         {/* Right: Actions */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => openEditModal(state.setups.find(s => s.id === setup.id))}
-                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit setup"
-                          >
-                            {Icons.edit}
-                          </button>
-                          <button
-                            onClick={() => initiateDelete(state.setups.find(s => s.id === setup.id))}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete setup"
-                          >
-                            {Icons.trash}
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => openEditModal(state.setups.find(s => s.id === setup.id))}
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit setup"
+                            >
+                              {Icons.edit}
+                            </button>
+                            <button
+                              onClick={() => initiateDelete(state.setups.find(s => s.id === setup.id))}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete setup"
+                            >
+                              {Icons.trash}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -5707,7 +5850,7 @@
     // =============================================================================
     // MISTAKES PAGE
     // =============================================================================
-    function MistakesPage({ state, setState, isMobile }) {
+    function MistakesPage({ state, setState, isMobile, isReadOnly = false }) {
       const [modalOpen, setModalOpen] = useState(false);
       const [editingMistake, setEditingMistake] = useState(null);
       const [mistakeName, setMistakeName] = useState('');
@@ -5950,13 +6093,15 @@
               <h1 className="text-2xl font-bold text-gray-900">Mistakes</h1>
               <p className="text-sm text-gray-500 mt-1">{state.mistakes.length} mistake types defined</p>
             </div>
-            <button
-              onClick={openAddModal}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-            >
-              {Icons.plus}
-              <span>Add Mistake</span>
-            </button>
+            {!isReadOnly && (
+              <button
+                onClick={openAddModal}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+              >
+                {Icons.plus}
+                <span>Add Mistake</span>
+              </button>
+            )}
           </div>
 
           {/* Info Banner */}
@@ -6161,22 +6306,24 @@
                         )}
                         
                         {/* Right: Actions */}
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <button
-                            onClick={() => openEditModal(state.mistakes.find(m => m.id === mistake.id))}
-                            className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Edit mistake"
-                          >
-                            {Icons.edit}
-                          </button>
-                          <button
-                            onClick={() => initiateDelete(state.mistakes.find(m => m.id === mistake.id))}
-                            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                            title="Delete mistake"
-                          >
-                            {Icons.trash}
-                          </button>
-                        </div>
+                        {!isReadOnly && (
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <button
+                              onClick={() => openEditModal(state.mistakes.find(m => m.id === mistake.id))}
+                              className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit mistake"
+                            >
+                              {Icons.edit}
+                            </button>
+                            <button
+                              onClick={() => initiateDelete(state.mistakes.find(m => m.id === mistake.id))}
+                              className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Delete mistake"
+                            >
+                              {Icons.trash}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -6303,7 +6450,7 @@
     // =============================================================================
     // GOALS PAGE
     // =============================================================================
-    function GoalsPage({ state, setState, isMobile }) {
+    function GoalsPage({ state, setState, isMobile, isReadOnly = false }) {
       const [yearlyGoalModalOpen, setYearlyGoalModalOpen] = useState(false);
       const [yearlyGoalInput, setYearlyGoalInput] = useState('');
       const [challengeModalOpen, setChallengeModalOpen] = useState(false);
@@ -6785,15 +6932,17 @@
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">{currentYear} Yearly Goal</h2>
-              <button
-                onClick={() => {
-                  setYearlyGoalInput(state.yearlyGoal?.target?.toString() || '');
-                  setYearlyGoalModalOpen(true);
-                }}
-                className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-              >
-                {state.yearlyGoal?.year === currentYear ? 'Edit' : 'Set Goal'}
-              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={() => {
+                    setYearlyGoalInput(state.yearlyGoal?.target?.toString() || '');
+                    setYearlyGoalModalOpen(true);
+                  }}
+                  className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+                >
+                  {state.yearlyGoal?.year === currentYear ? 'Edit' : 'Set Goal'}
+                </button>
+              )}
             </div>
 
             {yearlyGoalProgress ? (
@@ -6868,13 +7017,15 @@
                 </div>
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No yearly goal set</h3>
                 <p className="text-gray-500 mb-4">Set a profit target for {currentYear} to track your progress</p>
-                <button
-                  onClick={() => setYearlyGoalModalOpen(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-                >
-                  {Icons.plus}
-                  <span>Set Yearly Goal</span>
-                </button>
+                {!isReadOnly && (
+                  <button
+                    onClick={() => setYearlyGoalModalOpen(true)}
+                    className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    {Icons.plus}
+                    <span>Set Yearly Goal</span>
+                  </button>
+                )}
               </div>
             )}
           </div>
@@ -6883,13 +7034,15 @@
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
             <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
               <h2 className="font-semibold text-gray-900">Challenges</h2>
-              <button
-                onClick={() => setChallengeModalOpen(true)}
-                className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium"
-              >
-                {Icons.plus}
-                <span>New Challenge</span>
-              </button>
+              {!isReadOnly && (
+                <button
+                  onClick={() => setChallengeModalOpen(true)}
+                  className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  {Icons.plus}
+                  <span>New Challenge</span>
+                </button>
+              )}
             </div>
 
             {/* Active Challenges */}
@@ -8406,6 +8559,18 @@
       const [selectedMentee, setSelectedMentee] = useState(null);
       const [menteeData, setMenteeData] = useState(null);
       const [loadingMenteeData, setLoadingMenteeData] = useState(false);
+      const [activeJournalTab, setActiveJournalTab] = useState('dashboard');
+      const [selectedDate, setSelectedDate] = useState(todayISO());
+
+      // Journal tabs for mentor view
+      const journalTabs = [
+        { id: 'dashboard', label: 'Dashboard', icon: 'dashboard' },
+        { id: 'tradelog', label: 'Trade Log', icon: 'tradelog' },
+        { id: 'calendar', label: 'Calendar', icon: 'calendar' },
+        { id: 'goals', label: 'Goals', icon: 'goals' },
+        { id: 'setups', label: 'Setups', icon: 'setups' },
+        { id: 'mistakes', label: 'Mistakes', icon: 'mistakes' },
+      ];
 
       // Load mentees
       useEffect(() => {
@@ -8510,6 +8675,7 @@
 
         setLoadingMenteeData(true);
         setSelectedMentee(mentee);
+        setActiveJournalTab('dashboard');
 
         try {
           const stateDoc = await db.collection('users')
@@ -8562,46 +8728,169 @@
         }
       };
 
-      // If viewing a mentee's data, show their profile
-      if (selectedMentee && menteeData) {
-        return (
-          <div className="space-y-6">
-            {/* Back button */}
-            <button
-              onClick={() => { setSelectedMentee(null); setMenteeData(null); }}
-              className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-              </svg>
-              Back to Mentees
-            </button>
+      // Back to mentee list
+      const handleBackToList = () => {
+        setSelectedMentee(null);
+        setMenteeData(null);
+        setActiveJournalTab('dashboard');
+      };
 
-            {/* Mentee Header */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-2xl font-bold text-blue-600">
-                  {selectedMentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+      // Render the active journal tab content
+      const renderJournalContent = () => {
+        if (loadingMenteeData) {
+          return (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                <p className="text-gray-500">Loading journal...</p>
+              </div>
+            </div>
+          );
+        }
+
+        if (!menteeData) return null;
+
+        // Read-only setState that does nothing
+        const readOnlySetState = () => {};
+
+        switch (activeJournalTab) {
+          case 'dashboard':
+            return (
+              <DashboardPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                setActivePage={() => {}}
+                setSelectedDate={setSelectedDate}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'tradelog':
+            return (
+              <TradeLogPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'calendar':
+            return (
+              <CalendarPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'goals':
+            return (
+              <GoalsPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'setups':
+            return (
+              <SetupsPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'mistakes':
+            return (
+              <MistakesPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          default:
+            return null;
+        }
+      };
+
+      // If viewing a mentee's journal, show full journal view
+      if (selectedMentee) {
+        return (
+          <div className="space-y-4">
+            {/* Header Bar */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
+                {/* Back Button */}
+                <button
+                  onClick={handleBackToList}
+                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                  </svg>
+                  <span className="hidden sm:inline">Back to Mentees</span>
+                </button>
+
+                {/* Mentee Info */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold text-blue-600">
+                    {selectedMentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+                  <div>
+                    <h2 className="font-semibold text-gray-900">{selectedMentee.displayName}'s Journal</h2>
+                    <p className="text-xs text-gray-500">{selectedMentee.email}</p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">{selectedMentee.displayName}</h2>
-                  <p className="text-gray-500">{selectedMentee.email}</p>
+
+                {/* Read-Only Badge */}
+                <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-full text-sm font-medium border border-amber-200">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0110 0v4" />
+                  </svg>
+                  <span>Read-Only</span>
+                </div>
+              </div>
+
+              {/* Sub-Navigation Tabs */}
+              <div className="border-t border-gray-200 px-4">
+                <div className="flex gap-1 overflow-x-auto hide-scrollbar">
+                  {journalTabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveJournalTab(tab.id)}
+                      className={`px-4 py-3 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${
+                        activeJournalTab === tab.id
+                          ? 'text-blue-600 border-blue-600'
+                          : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* Render mentee's ProfilePage with their data */}
-            <ProfilePage state={menteeData} setState={() => {}} isMobile={isMobile} readOnly={true} />
+            {/* Journal Content */}
+            <div>
+              {renderJournalContent()}
+            </div>
           </div>
         );
       }
 
+      // Mentee List View
       return (
         <div className="space-y-6">
           {/* Header */}
           <div>
             <h1 className="text-2xl font-bold text-gray-900">My Mentees</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage and view your mentees' progress</p>
+            <p className="text-sm text-gray-500 mt-1">Manage and view your mentees' trading journals</p>
           </div>
 
           {/* Invite Section */}
@@ -8657,43 +8946,52 @@
               </div>
             ) : (
               <div className="divide-y divide-gray-200">
-                {mentees.map(mentee => (
-                  <div key={mentee.id} className="px-6 py-4 flex items-center justify-between hover:bg-gray-50">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold text-blue-600">
-                        {mentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                {mentees.map(mentee => {
+                  const isActive = mentee.status === 'active';
+                  return (
+                    <div key={mentee.id} className="px-6 py-4 hover:bg-gray-50">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold text-blue-600">
+                            {mentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                          </div>
+                          <div>
+                            <h3 className="font-medium text-gray-900">{mentee.displayName}</h3>
+                            <p className="text-sm text-gray-500">{mentee.email}</p>
+                          </div>
+                          <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                            isActive 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>
+                            {isActive ? 'Active' : 'Pending'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isActive && (
+                            <button
+                              onClick={() => loadMenteeData(mentee)}
+                              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                              View Journal
+                            </button>
+                          )}
+                          <button
+                            onClick={() => removeMentee(mentee.id)}
+                            className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                            title="Remove mentee"
+                          >
+                            {Icons.trash}
+                          </button>
+                        </div>
                       </div>
-                      <div>
-                        <h3 className="font-medium text-gray-900">{mentee.displayName}</h3>
-                        <p className="text-sm text-gray-500">{mentee.email}</p>
-                      </div>
-                      <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                        mentee.status === 'active' 
-                          ? 'bg-green-100 text-green-700' 
-                          : 'bg-yellow-100 text-yellow-700'
-                      }`}>
-                        {mentee.status === 'active' ? 'Active' : 'Pending'}
-                      </span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      {mentee.status === 'active' && (
-                        <button
-                          onClick={() => loadMenteeData(mentee)}
-                          className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
-                        >
-                          View Journal
-                        </button>
-                      )}
-                      <button
-                        onClick={() => removeMentee(mentee.id)}
-                        className="px-3 py-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                        title="Remove mentee"
-                      >
-                        {Icons.trash}
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
