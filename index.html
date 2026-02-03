@@ -392,6 +392,26 @@
       rule_violation: { icon: '🚫', label: 'Rule Violation', bgColor: 'bg-red-100', textColor: 'text-red-700' },
     };
 
+    // Assignment categories for homework
+    const ASSIGNMENT_CATEGORIES = {
+      reading: { icon: '📖', label: 'Reading', bgColor: 'bg-blue-100', textColor: 'text-blue-700' },
+      practice: { icon: '🎯', label: 'Practice', bgColor: 'bg-green-100', textColor: 'text-green-700' },
+      review: { icon: '📊', label: 'Review', bgColor: 'bg-purple-100', textColor: 'text-purple-700' },
+      mindset: { icon: '🧠', label: 'Mindset', bgColor: 'bg-pink-100', textColor: 'text-pink-700' },
+      risk: { icon: '📏', label: 'Risk Management', bgColor: 'bg-orange-100', textColor: 'text-orange-700' },
+      other: { icon: '📝', label: 'Other', bgColor: 'bg-gray-100', textColor: 'text-gray-700' },
+    };
+
+    // Challenge types for homework challenges
+    const HOMEWORK_CHALLENGE_TYPES = {
+      profit: { label: 'Profit Target', metric: 'Total P&L', unit: '$' },
+      winrate: { label: 'Win Rate', metric: 'Win percentage', unit: '%' },
+      trades: { label: 'Trade Count', metric: 'Number of trades', unit: 'trades' },
+      streak: { label: 'Profitable Streak', metric: 'Consecutive profitable days', unit: 'days' },
+      max_loss: { label: 'Max Loss Limit', metric: 'No single loss over', unit: '$' },
+      custom: { label: 'Custom', metric: 'Manual tracking', unit: '' },
+    };
+
     const EMPTY_STATE = {
       trades: [],
       setups: [],
@@ -559,6 +579,13 @@
           <circle cx="9" cy="7" r="4" />
           <path d="M23 21v-2a4 4 0 00-3-3.87" />
           <path d="M16 3.13a4 4 0 010 7.75" />
+        </svg>
+      ),
+      assignments: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+          <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
+          <rect x="9" y="3" width="6" height="4" rx="1" />
+          <path d="M9 14l2 2 4-4" />
         </svg>
       ),
     };
@@ -4184,9 +4211,9 @@
                         <div className="border-t border-gray-200 pt-4">
                           <div className="flex items-center justify-between mb-3">
                             <p className="text-sm font-medium text-gray-700">Trade Flag</p>
-                            {isMentorView && flag && (
+                            {isMentorView && flag && onToggleFlagStatus && (
                               <button
-                                onClick={() => toggleFlagStatus(viewingTrade.id)}
+                                onClick={() => onToggleFlagStatus(viewingTrade.id)}
                                 className={`text-xs px-2 py-1 rounded ${
                                   flag.status === 'open' 
                                     ? 'bg-green-100 text-green-700 hover:bg-green-200' 
@@ -4211,16 +4238,16 @@
                               </div>
                               {flag.note && <p className="text-sm text-gray-600 mt-1">{flag.note}</p>}
                               <p className="text-xs text-gray-400 mt-2">Flagged by {flag.mentorName}</p>
-                              {isMentorView && (
+                              {isMentorView && onRemoveFlag && (
                                 <button
-                                  onClick={() => removeFlag(viewingTrade.id)}
+                                  onClick={() => onRemoveFlag(viewingTrade.id)}
                                   className="text-xs text-red-500 hover:text-red-700 mt-2"
                                 >
                                   Remove Flag
                                 </button>
                               )}
                             </div>
-                          ) : isMentorView ? (
+                          ) : isMentorView && onAddFlag ? (
                             <div className="relative">
                               <button
                                 onClick={() => setShowFlagMenu(!showFlagMenu)}
@@ -4339,16 +4366,20 @@
                           {/* Submit Button */}
                           <button
                             onClick={async () => {
-                              if (!feedbackContent.trim()) return;
+                              if (!feedbackContent.trim() || !onAddFeedback) return;
                               setSubmittingFeedback(true);
-                              const success = await onAddFeedback(viewingTrade.id, feedbackType, feedbackContent);
-                              if (success) {
-                                setFeedbackContent('');
-                                setFeedbackType('general');
+                              try {
+                                const success = await onAddFeedback(viewingTrade.id, feedbackType, feedbackContent);
+                                if (success) {
+                                  setFeedbackContent('');
+                                  setFeedbackType('general');
+                                }
+                              } catch (err) {
+                                console.error('Error adding feedback:', err);
                               }
                               setSubmittingFeedback(false);
                             }}
-                            disabled={!feedbackContent.trim() || submittingFeedback}
+                            disabled={!feedbackContent.trim() || submittingFeedback || !onAddFeedback}
                             className="w-full py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
                           >
                             {submittingFeedback ? 'Adding...' : 'Add Feedback'}
@@ -8834,6 +8865,1055 @@
     }
 
     // =============================================================================
+    // ASSIGNMENTS PAGE (Mentee's view of their assignments)
+    // =============================================================================
+    function AssignmentsPage({ 
+      assignments, 
+      journalState,
+      userProfile,
+      isMobile,
+      onUpdateAssignment,
+    }) {
+      const [viewingAssignment, setViewingAssignment] = useState(null);
+      const [notesText, setNotesText] = useState('');
+      const [filter, setFilter] = useState('active');
+
+      // Calculate challenge progress
+      const calculateChallengeProgress = (challenge, trades) => {
+        if (!challenge || !trades) return { current: 0, progress: 0, status: 'active' };
+
+        const startDate = challenge.startDate;
+        const endDate = challenge.endDate || todayISO();
+        
+        const relevantTrades = trades.filter(t => 
+          t.entryDate >= startDate && t.entryDate <= endDate
+        ).map(t => ({ ...t, derived: calcTradeDerived(t) }));
+
+        const closedTrades = relevantTrades.filter(t => !t.derived.isOpen);
+
+        switch (challenge.type) {
+          case 'profit':
+            const totalPnL = closedTrades.reduce((sum, t) => sum + (t.derived.pnlFinal || 0), 0);
+            return { 
+              current: totalPnL, 
+              progress: Math.min(100, (totalPnL / challenge.target) * 100),
+              status: totalPnL >= challenge.target ? 'completed' : 'active'
+            };
+            
+          case 'winrate':
+            const wins = closedTrades.filter(t => t.derived.winLoss === 'W');
+            const winRate = closedTrades.length > 0 ? (wins.length / closedTrades.length) * 100 : 0;
+            const tradesNeeded = challenge.tradesRequired || 20;
+            return { 
+              current: winRate,
+              tradesCompleted: closedTrades.length,
+              tradesRequired: tradesNeeded,
+              progress: Math.min(100, (closedTrades.length / tradesNeeded) * 100),
+              status: closedTrades.length >= tradesNeeded ? (winRate >= challenge.target ? 'completed' : 'failed') : 'active'
+            };
+            
+          case 'trades':
+            return { 
+              current: relevantTrades.length, 
+              progress: Math.min(100, (relevantTrades.length / challenge.target) * 100),
+              status: relevantTrades.length >= challenge.target ? 'completed' : 'active'
+            };
+            
+          case 'streak':
+            const dailyPnL = {};
+            closedTrades.forEach(t => {
+              const date = t.exitDate || t.entryDate;
+              dailyPnL[date] = (dailyPnL[date] || 0) + (t.derived.pnlFinal || 0);
+            });
+            const sortedDays = Object.keys(dailyPnL).sort();
+            let maxStreak = 0, currentStreak = 0;
+            sortedDays.forEach(day => {
+              if (dailyPnL[day] > 0) {
+                currentStreak++;
+                maxStreak = Math.max(maxStreak, currentStreak);
+              } else {
+                currentStreak = 0;
+              }
+            });
+            return { 
+              current: maxStreak, 
+              progress: Math.min(100, (maxStreak / challenge.target) * 100),
+              status: maxStreak >= challenge.target ? 'completed' : 'active'
+            };
+            
+          case 'max_loss':
+            const losses = closedTrades.filter(t => (t.derived.pnlFinal || 0) < 0);
+            const maxLoss = losses.length > 0 ? Math.min(...losses.map(t => t.derived.pnlFinal)) : 0;
+            const withinLimit = Math.abs(maxLoss) <= challenge.target;
+            return { 
+              current: maxLoss, 
+              progress: withinLimit ? 100 : 0,
+              status: withinLimit ? 'active' : 'failed'
+            };
+            
+          default:
+            return { current: 0, progress: 0, status: 'active' };
+        }
+      };
+
+      // Filter assignments
+      const activeAssignments = assignments.filter(a => ['assigned', 'in_progress'].includes(a.status));
+      const completedAssignments = assignments.filter(a => ['completed', 'reviewed'].includes(a.status));
+      const filteredAssignments = filter === 'active' ? activeAssignments : completedAssignments;
+
+      // Get days until due
+      const getDaysUntilDue = (dueDate) => {
+        if (!dueDate) return null;
+        const today = new Date(todayISO());
+        const due = new Date(dueDate);
+        const diffTime = due - today;
+        return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      };
+
+      const handleStartWorking = async (assignment) => {
+        if (assignment.status === 'assigned') {
+          await onUpdateAssignment(assignment.id, { status: 'in_progress' });
+        }
+      };
+
+      const handleSaveNotes = async (assignmentId) => {
+        await onUpdateAssignment(assignmentId, { menteeNotes: notesText });
+      };
+
+      const handleMarkComplete = async (assignmentId) => {
+        await onUpdateAssignment(assignmentId, { 
+          status: 'completed',
+          completedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        setViewingAssignment(null);
+      };
+
+      if (!userProfile?.mentorId) {
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+              📋
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Assignments</h3>
+            <p className="text-gray-500">Connect with a mentor to receive assignments and guidance.</p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="space-y-6">
+          {/* Header */}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">My Assignments</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              From your mentor: {userProfile.mentorName}
+            </p>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <p className="text-sm text-gray-500">Active</p>
+              <p className="text-2xl font-bold text-blue-600">{activeAssignments.length}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <p className="text-sm text-gray-500">Completed</p>
+              <p className="text-2xl font-bold text-green-600">{completedAssignments.length}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <p className="text-sm text-gray-500">With Challenges</p>
+              <p className="text-2xl font-bold text-purple-600">{assignments.filter(a => a.hasChallenge).length}</p>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+              <p className="text-sm text-gray-500">Due Soon</p>
+              <p className="text-2xl font-bold text-orange-600">
+                {activeAssignments.filter(a => {
+                  const days = getDaysUntilDue(a.dueDate);
+                  return days !== null && days <= 3 && days >= 0;
+                }).length}
+              </p>
+            </div>
+          </div>
+
+          {/* Filter Tabs */}
+          <div className="flex gap-2">
+            <button
+              onClick={() => setFilter('active')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                filter === 'active'
+                  ? 'bg-blue-100 text-blue-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Active ({activeAssignments.length})
+            </button>
+            <button
+              onClick={() => setFilter('completed')}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                filter === 'completed'
+                  ? 'bg-green-100 text-green-700'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              Completed ({completedAssignments.length})
+            </button>
+          </div>
+
+          {/* Assignments List */}
+          {filteredAssignments.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                {filter === 'active' ? '📋' : '✅'}
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {filter === 'active' ? 'No active assignments' : 'No completed assignments yet'}
+              </h3>
+              <p className="text-gray-500">
+                {filter === 'active' 
+                  ? 'Your mentor will assign tasks to help your trading development.'
+                  : 'Complete assignments to see them here.'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredAssignments.map(assignment => {
+                const catInfo = ASSIGNMENT_CATEGORIES[assignment.category] || ASSIGNMENT_CATEGORIES.other;
+                const daysUntil = getDaysUntilDue(assignment.dueDate);
+                const challengeProgress = assignment.hasChallenge && assignment.challenge
+                  ? calculateChallengeProgress(assignment.challenge, journalState?.trades || [])
+                  : null;
+
+                return (
+                  <div 
+                    key={assignment.id}
+                    className={`bg-white rounded-xl border shadow-sm p-4 cursor-pointer transition-colors ${
+                      assignment.status === 'reviewed' 
+                        ? 'border-purple-200 bg-purple-50/30' 
+                        : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                    onClick={() => {
+                      setViewingAssignment(assignment);
+                      setNotesText(assignment.menteeNotes || '');
+                      handleStartWorking(assignment);
+                    }}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Category Icon */}
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl ${catInfo.bgColor}`}>
+                        {catInfo.icon}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        {/* Title & Status */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-gray-900 truncate">{assignment.title}</h3>
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                            assignment.status === 'assigned' ? 'bg-gray-100 text-gray-600' :
+                            assignment.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                            assignment.status === 'completed' ? 'bg-green-100 text-green-700' :
+                            'bg-purple-100 text-purple-700'
+                          }`}>
+                            {assignment.status === 'in_progress' ? 'In Progress' : 
+                             assignment.status === 'reviewed' ? '✓ Reviewed' :
+                             assignment.status.charAt(0).toUpperCase() + assignment.status.slice(1)}
+                          </span>
+                        </div>
+
+                        {/* Due Date */}
+                        {assignment.dueDate && filter === 'active' && (
+                          <p className={`text-sm ${
+                            daysUntil !== null && daysUntil < 0 ? 'text-red-600 font-medium' :
+                            daysUntil !== null && daysUntil <= 3 ? 'text-orange-600' :
+                            'text-gray-500'
+                          }`}>
+                            {daysUntil !== null && daysUntil < 0 
+                              ? `⚠️ ${Math.abs(daysUntil)} days overdue`
+                              : daysUntil === 0 
+                                ? '⏰ Due today!'
+                                : `Due: ${assignment.dueDate} (${daysUntil} day${daysUntil !== 1 ? 's' : ''} left)`
+                            }
+                          </p>
+                        )}
+
+                        {/* Challenge Progress */}
+                        {assignment.hasChallenge && challengeProgress && (
+                          <div className="mt-3">
+                            <div className="flex items-center justify-between text-sm mb-1">
+                              <span className="text-gray-600">
+                                {HOMEWORK_CHALLENGE_TYPES[assignment.challenge.type]?.label}
+                              </span>
+                              <span className={`font-medium ${
+                                challengeProgress.status === 'completed' ? 'text-green-600' :
+                                challengeProgress.status === 'failed' ? 'text-red-600' :
+                                'text-blue-600'
+                              }`}>
+                                {Math.round(challengeProgress.progress)}%
+                              </span>
+                            </div>
+                            <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all ${
+                                  challengeProgress.status === 'completed' ? 'bg-green-500' :
+                                  challengeProgress.status === 'failed' ? 'bg-red-500' :
+                                  'bg-blue-500'
+                                }`}
+                                style={{ width: `${Math.min(100, challengeProgress.progress)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Mentor Review Badge */}
+                        {assignment.mentorReview && (
+                          <div className="mt-2 flex items-center gap-1 text-sm text-purple-600">
+                            <span>💬</span>
+                            <span>Mentor reviewed this</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Arrow */}
+                      <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* View Assignment Modal */}
+          {viewingAssignment && (
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+              <div className="fixed inset-0 bg-black/50" onClick={() => setViewingAssignment(null)} />
+              <div className="relative min-h-screen flex items-center justify-center p-4">
+                <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                  <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-gray-900">Assignment Details</h2>
+                    <button onClick={() => setViewingAssignment(null)} className="p-2 hover:bg-gray-100 rounded-lg">
+                      {Icons.x}
+                    </button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    {/* Header */}
+                    <div className="flex items-start gap-3">
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl ${
+                        ASSIGNMENT_CATEGORIES[viewingAssignment.category]?.bgColor || 'bg-gray-100'
+                      }`}>
+                        {ASSIGNMENT_CATEGORIES[viewingAssignment.category]?.icon || '📝'}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-900">{viewingAssignment.title}</h3>
+                        <p className="text-sm text-gray-500">
+                          From {viewingAssignment.mentorName}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {viewingAssignment.description && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <p className="text-gray-700 whitespace-pre-wrap">{viewingAssignment.description}</p>
+                      </div>
+                    )}
+
+                    {/* Challenge Progress */}
+                    {viewingAssignment.hasChallenge && viewingAssignment.challenge && (
+                      <div className="bg-blue-50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-blue-700 mb-2">📊 Challenge Progress</h4>
+                        {(() => {
+                          const progress = calculateChallengeProgress(viewingAssignment.challenge, journalState?.trades || []);
+                          return (
+                            <>
+                              <p className="text-sm text-blue-600 mb-2">
+                                {HOMEWORK_CHALLENGE_TYPES[viewingAssignment.challenge.type]?.label}: 
+                                {viewingAssignment.challenge.type === 'winrate' 
+                                  ? ` ${viewingAssignment.challenge.target}% over ${viewingAssignment.challenge.tradesRequired} trades`
+                                  : ` ${viewingAssignment.challenge.target} ${HOMEWORK_CHALLENGE_TYPES[viewingAssignment.challenge.type]?.unit || ''}`
+                                }
+                              </p>
+                              <div className="h-3 bg-blue-200 rounded-full overflow-hidden mb-2">
+                                <div 
+                                  className={`h-full ${
+                                    progress.status === 'completed' ? 'bg-green-500' :
+                                    progress.status === 'failed' ? 'bg-red-500' :
+                                    'bg-blue-500'
+                                  }`}
+                                  style={{ width: `${Math.min(100, progress.progress)}%` }}
+                                />
+                              </div>
+                              <p className="text-sm font-medium text-blue-900">
+                                Current: {viewingAssignment.challenge.type === 'profit' || viewingAssignment.challenge.type === 'max_loss'
+                                  ? formatCurrency(progress.current)
+                                  : viewingAssignment.challenge.type === 'winrate'
+                                    ? `${progress.current?.toFixed(1)}% (${progress.tradesCompleted}/${progress.tradesRequired} trades)`
+                                    : progress.current
+                                }
+                                {' '}
+                                <span className={`${
+                                  progress.status === 'completed' ? 'text-green-600' :
+                                  progress.status === 'failed' ? 'text-red-600' :
+                                  'text-blue-600'
+                                }`}>
+                                  ({progress.status === 'completed' ? '✓ Complete!' :
+                                    progress.status === 'failed' ? '✗ Not met' :
+                                    `${Math.round(progress.progress)}%`})
+                                </span>
+                              </p>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {/* My Notes */}
+                    {viewingAssignment.status !== 'reviewed' && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">My Notes & Progress</h4>
+                        <textarea
+                          value={notesText}
+                          onChange={(e) => setNotesText(e.target.value)}
+                          placeholder="Add your notes, reflections, or questions..."
+                          rows={4}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <button
+                          onClick={() => handleSaveNotes(viewingAssignment.id)}
+                          className="mt-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
+                        >
+                          Save Notes
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Saved Notes (for reviewed assignments) */}
+                    {viewingAssignment.status === 'reviewed' && viewingAssignment.menteeNotes && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-1">My Notes</h4>
+                        <p className="text-gray-600 whitespace-pre-wrap">{viewingAssignment.menteeNotes}</p>
+                      </div>
+                    )}
+
+                    {/* Mentor Review */}
+                    {viewingAssignment.mentorReview && (
+                      <div className="bg-purple-50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-purple-700 mb-1">💬 Mentor's Review</h4>
+                        <p className="text-purple-900 whitespace-pre-wrap">{viewingAssignment.mentorReview}</p>
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    {['assigned', 'in_progress'].includes(viewingAssignment.status) && (
+                      <div className="border-t border-gray-200 pt-4">
+                        <button
+                          onClick={() => handleMarkComplete(viewingAssignment.id)}
+                          className="w-full py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium flex items-center justify-center gap-2"
+                        >
+                          <span>✓</span>
+                          <span>Mark as Complete</span>
+                        </button>
+                        <p className="text-xs text-gray-500 text-center mt-2">
+                          Your mentor will review and provide feedback
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============================================================================
+    // MENTOR ASSIGNMENTS TAB (Mentor view of mentee's assignments)
+    // =============================================================================
+    function MentorAssignmentsTab({ 
+      assignments, 
+      menteeData, 
+      selectedMentee,
+      onCreateAssignment, 
+      onUpdateAssignment, 
+      onDeleteAssignment,
+      calculateChallengeProgress,
+      isMobile 
+    }) {
+      const [modalOpen, setModalOpen] = useState(false);
+      const [filter, setFilter] = useState('all'); // all, active, completed
+      const [viewingAssignment, setViewingAssignment] = useState(null);
+      const [reviewText, setReviewText] = useState('');
+      
+      // Form state for creating assignment
+      const [formData, setFormData] = useState({
+        title: '',
+        description: '',
+        category: 'practice',
+        dueDate: '',
+        hasChallenge: false,
+        challengeType: 'profit',
+        challengeTarget: '',
+        challengeTradesRequired: '20',
+        challengeEndDate: '',
+      });
+
+      const resetForm = () => {
+        setFormData({
+          title: '',
+          description: '',
+          category: 'practice',
+          dueDate: '',
+          hasChallenge: false,
+          challengeType: 'profit',
+          challengeTarget: '',
+          challengeTradesRequired: '20',
+          challengeEndDate: '',
+        });
+      };
+
+      const handleCreateAssignment = async () => {
+        if (!formData.title.trim()) return;
+
+        const assignmentData = {
+          title: formData.title.trim(),
+          description: formData.description.trim(),
+          category: formData.category,
+          dueDate: formData.dueDate || null,
+          hasChallenge: formData.hasChallenge,
+          challenge: formData.hasChallenge ? {
+            type: formData.challengeType,
+            target: parseFloat(formData.challengeTarget) || 0,
+            tradesRequired: formData.challengeType === 'winrate' ? parseInt(formData.challengeTradesRequired) || 20 : null,
+            startDate: todayISO(),
+            endDate: formData.challengeEndDate || null,
+            status: 'active',
+          } : null,
+        };
+
+        const success = await onCreateAssignment(assignmentData);
+        if (success) {
+          setModalOpen(false);
+          resetForm();
+        }
+      };
+
+      const handleAddReview = async (assignmentId) => {
+        if (!reviewText.trim()) return;
+        await onUpdateAssignment(assignmentId, { 
+          mentorReview: reviewText.trim(),
+          status: 'reviewed'
+        });
+        setReviewText('');
+        setViewingAssignment(null);
+      };
+
+      // Filter assignments
+      const filteredAssignments = assignments.filter(a => {
+        if (filter === 'active') return ['assigned', 'in_progress'].includes(a.status);
+        if (filter === 'completed') return ['completed', 'reviewed'].includes(a.status);
+        return true;
+      });
+
+      // Get days until due
+      const getDaysUntilDue = (dueDate) => {
+        if (!dueDate) return null;
+        const today = new Date(todayISO());
+        const due = new Date(dueDate);
+        const diffTime = due - today;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return diffDays;
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Assignments</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                {assignments.length} assignment{assignments.length !== 1 ? 's' : ''} for {selectedMentee?.displayName}
+              </p>
+            </div>
+            <button
+              onClick={() => setModalOpen(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              {Icons.plus}
+              <span>New Assignment</span>
+            </button>
+          </div>
+
+          {/* Filters */}
+          <div className="flex gap-2">
+            {['all', 'active', 'completed'].map(f => (
+              <button
+                key={f}
+                onClick={() => setFilter(f)}
+                className={`px-3 py-1.5 text-sm rounded-lg font-medium transition-colors ${
+                  filter === f 
+                    ? 'bg-blue-100 text-blue-700' 
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+
+          {/* Assignments List */}
+          {filteredAssignments.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                📋
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No assignments yet</h3>
+              <p className="text-gray-500 mb-4">Create an assignment to help guide your mentee's learning</p>
+              <button
+                onClick={() => setModalOpen(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                {Icons.plus}
+                <span>Create First Assignment</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredAssignments.map(assignment => {
+                const catInfo = ASSIGNMENT_CATEGORIES[assignment.category] || ASSIGNMENT_CATEGORIES.other;
+                const daysUntil = getDaysUntilDue(assignment.dueDate);
+                const challengeProgress = assignment.hasChallenge && assignment.challenge
+                  ? calculateChallengeProgress(assignment.challenge, menteeData?.trades || [])
+                  : null;
+
+                return (
+                  <div 
+                    key={assignment.id}
+                    className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 hover:border-gray-300 transition-colors cursor-pointer"
+                    onClick={() => setViewingAssignment(assignment)}
+                  >
+                    <div className="flex items-start gap-3">
+                      {/* Category Icon */}
+                      <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xl ${catInfo.bgColor}`}>
+                        {catInfo.icon}
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        {/* Title & Status */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-medium text-gray-900 truncate">{assignment.title}</h3>
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                            assignment.status === 'assigned' ? 'bg-gray-100 text-gray-600' :
+                            assignment.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                            assignment.status === 'completed' ? 'bg-green-100 text-green-700' :
+                            'bg-purple-100 text-purple-700'
+                          }`}>
+                            {assignment.status === 'in_progress' ? 'In Progress' : 
+                             assignment.status.charAt(0).toUpperCase() + assignment.status.slice(1)}
+                          </span>
+                        </div>
+
+                        {/* Due Date */}
+                        {assignment.dueDate && (
+                          <p className={`text-sm ${
+                            daysUntil !== null && daysUntil < 0 ? 'text-red-600' :
+                            daysUntil !== null && daysUntil <= 3 ? 'text-orange-600' :
+                            'text-gray-500'
+                          }`}>
+                            Due: {assignment.dueDate}
+                            {daysUntil !== null && (
+                              <span className="ml-1">
+                                ({daysUntil < 0 ? `${Math.abs(daysUntil)} days overdue` : 
+                                  daysUntil === 0 ? 'Today' : 
+                                  `${daysUntil} day${daysUntil !== 1 ? 's' : ''} left`})
+                              </span>
+                            )}
+                          </p>
+                        )}
+
+                        {/* Challenge Progress */}
+                        {assignment.hasChallenge && challengeProgress && (
+                          <div className="mt-2">
+                            <div className="flex items-center gap-2 text-sm">
+                              <span className="text-gray-600">
+                                {HOMEWORK_CHALLENGE_TYPES[assignment.challenge.type]?.label}: 
+                              </span>
+                              <span className="font-medium">
+                                {assignment.challenge.type === 'profit' || assignment.challenge.type === 'max_loss' 
+                                  ? formatCurrency(challengeProgress.current)
+                                  : assignment.challenge.type === 'winrate'
+                                    ? `${challengeProgress.current?.toFixed(1)}% (${challengeProgress.tradesCompleted}/${challengeProgress.tradesRequired} trades)`
+                                    : `${challengeProgress.current}/${assignment.challenge.target}`
+                                }
+                              </span>
+                              <span className={`text-xs px-1.5 py-0.5 rounded ${
+                                challengeProgress.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                challengeProgress.status === 'failed' ? 'bg-red-100 text-red-700' :
+                                'bg-blue-100 text-blue-700'
+                              }`}>
+                                {challengeProgress.status === 'completed' ? '✓ Complete' :
+                                 challengeProgress.status === 'failed' ? '✗ Failed' :
+                                 `${Math.round(challengeProgress.progress)}%`}
+                              </span>
+                            </div>
+                            <div className="mt-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full transition-all ${
+                                  challengeProgress.status === 'completed' ? 'bg-green-500' :
+                                  challengeProgress.status === 'failed' ? 'bg-red-500' :
+                                  'bg-blue-500'
+                                }`}
+                                style={{ width: `${Math.min(100, challengeProgress.progress)}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Mentee Notes Preview */}
+                        {assignment.menteeNotes && (
+                          <p className="text-sm text-gray-500 mt-2 truncate">
+                            💬 Mentee: "{assignment.menteeNotes}"
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Actions */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Delete this assignment?')) {
+                            onDeleteAssignment(assignment.id);
+                          }
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        {Icons.trash}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Create Assignment Modal */}
+          {modalOpen && (
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+              <div className="fixed inset-0 bg-black/50" onClick={() => { setModalOpen(false); resetForm(); }} />
+              <div className="relative min-h-screen flex items-center justify-center p-4">
+                <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                  <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
+                    <h2 className="text-lg font-semibold text-gray-900">Create Assignment</h2>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    {/* Title */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Title <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.title}
+                        onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                        placeholder="e.g., Focus on A+ setups this week"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Category */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">Category</label>
+                      <div className="flex flex-wrap gap-2">
+                        {Object.entries(ASSIGNMENT_CATEGORIES).map(([key, val]) => (
+                          <button
+                            key={key}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, category: key })}
+                            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm border transition-colors ${
+                              formData.category === key
+                                ? `${val.bgColor} ${val.textColor} border-current`
+                                : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                            }`}
+                          >
+                            <span>{val.icon}</span>
+                            <span>{val.label}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                      <textarea
+                        value={formData.description}
+                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                        placeholder="Provide details about what they should focus on..."
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Due Date */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Due Date (optional)</label>
+                      <input
+                        type="date"
+                        value={formData.dueDate}
+                        onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                        min={todayISO()}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Challenge Toggle */}
+                    <div className="border-t border-gray-200 pt-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formData.hasChallenge}
+                          onChange={(e) => setFormData({ ...formData, hasChallenge: e.target.checked })}
+                          className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
+                        />
+                        <span className="text-sm font-medium text-gray-700">Attach a Measurable Challenge</span>
+                      </label>
+                    </div>
+
+                    {/* Challenge Options */}
+                    {formData.hasChallenge && (
+                      <div className="bg-gray-50 rounded-lg p-4 space-y-4">
+                        {/* Challenge Type */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Challenge Type</label>
+                          <select
+                            value={formData.challengeType}
+                            onChange={(e) => setFormData({ ...formData, challengeType: e.target.value })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            {Object.entries(HOMEWORK_CHALLENGE_TYPES).map(([key, val]) => (
+                              <option key={key} value={key}>{val.label} - {val.metric}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {/* Target Value */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Target {HOMEWORK_CHALLENGE_TYPES[formData.challengeType]?.unit && 
+                              `(${HOMEWORK_CHALLENGE_TYPES[formData.challengeType].unit})`}
+                          </label>
+                          <input
+                            type="number"
+                            value={formData.challengeTarget}
+                            onChange={(e) => setFormData({ ...formData, challengeTarget: e.target.value })}
+                            placeholder={formData.challengeType === 'profit' ? '500' : 
+                                        formData.challengeType === 'winrate' ? '60' : '10'}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+
+                        {/* Trades Required (for win rate) */}
+                        {formData.challengeType === 'winrate' && (
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                              Over how many trades?
+                            </label>
+                            <input
+                              type="number"
+                              value={formData.challengeTradesRequired}
+                              onChange={(e) => setFormData({ ...formData, challengeTradesRequired: e.target.value })}
+                              placeholder="20"
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                        )}
+
+                        {/* Challenge End Date */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">End Date (optional)</label>
+                          <input
+                            type="date"
+                            value={formData.challengeEndDate}
+                            onChange={(e) => setFormData({ ...formData, challengeEndDate: e.target.value })}
+                            min={todayISO()}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 rounded-b-xl flex justify-end gap-3">
+                    <button
+                      onClick={() => { setModalOpen(false); resetForm(); }}
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleCreateAssignment}
+                      disabled={!formData.title.trim()}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                    >
+                      Create Assignment
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* View Assignment Modal */}
+          {viewingAssignment && (
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+              <div className="fixed inset-0 bg-black/50" onClick={() => setViewingAssignment(null)} />
+              <div className="relative min-h-screen flex items-center justify-center p-4">
+                <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                  <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl flex items-center justify-between">
+                    <h2 className="text-lg font-semibold text-gray-900">Assignment Details</h2>
+                    <button onClick={() => setViewingAssignment(null)} className="p-2 hover:bg-gray-100 rounded-lg">
+                      {Icons.x}
+                    </button>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    {/* Header */}
+                    <div className="flex items-start gap-3">
+                      <div className={`w-12 h-12 rounded-lg flex items-center justify-center text-2xl ${
+                        ASSIGNMENT_CATEGORIES[viewingAssignment.category]?.bgColor || 'bg-gray-100'
+                      }`}>
+                        {ASSIGNMENT_CATEGORIES[viewingAssignment.category]?.icon || '📝'}
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-gray-900">{viewingAssignment.title}</h3>
+                        <p className="text-sm text-gray-500">
+                          Created {viewingAssignment.createdAt?.toDate?.().toLocaleDateString() || 'recently'}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {viewingAssignment.description && (
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-1">Description</h4>
+                        <p className="text-gray-600 whitespace-pre-wrap">{viewingAssignment.description}</p>
+                      </div>
+                    )}
+
+                    {/* Status & Due Date */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-700 mb-1">Status</h4>
+                        <span className={`inline-flex px-2 py-1 text-sm rounded-full font-medium ${
+                          viewingAssignment.status === 'assigned' ? 'bg-gray-100 text-gray-600' :
+                          viewingAssignment.status === 'in_progress' ? 'bg-blue-100 text-blue-700' :
+                          viewingAssignment.status === 'completed' ? 'bg-green-100 text-green-700' :
+                          'bg-purple-100 text-purple-700'
+                        }`}>
+                          {viewingAssignment.status === 'in_progress' ? 'In Progress' : 
+                           viewingAssignment.status.charAt(0).toUpperCase() + viewingAssignment.status.slice(1)}
+                        </span>
+                      </div>
+                      {viewingAssignment.dueDate && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-700 mb-1">Due Date</h4>
+                          <p className="text-gray-600">{viewingAssignment.dueDate}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Challenge Progress */}
+                    {viewingAssignment.hasChallenge && viewingAssignment.challenge && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Challenge Progress</h4>
+                        {(() => {
+                          const progress = calculateChallengeProgress(viewingAssignment.challenge, menteeData?.trades || []);
+                          return (
+                            <>
+                              <p className="text-sm text-gray-600 mb-2">
+                                {HOMEWORK_CHALLENGE_TYPES[viewingAssignment.challenge.type]?.label}: 
+                                {viewingAssignment.challenge.type === 'winrate' 
+                                  ? ` ${viewingAssignment.challenge.target}% over ${viewingAssignment.challenge.tradesRequired} trades`
+                                  : ` ${viewingAssignment.challenge.target} ${HOMEWORK_CHALLENGE_TYPES[viewingAssignment.challenge.type]?.unit || ''}`
+                                }
+                              </p>
+                              <div className="h-3 bg-gray-200 rounded-full overflow-hidden mb-2">
+                                <div 
+                                  className={`h-full ${
+                                    progress.status === 'completed' ? 'bg-green-500' :
+                                    progress.status === 'failed' ? 'bg-red-500' :
+                                    'bg-blue-500'
+                                  }`}
+                                  style={{ width: `${Math.min(100, progress.progress)}%` }}
+                                />
+                              </div>
+                              <p className="text-sm font-medium">
+                                Current: {viewingAssignment.challenge.type === 'profit' || viewingAssignment.challenge.type === 'max_loss'
+                                  ? formatCurrency(progress.current)
+                                  : viewingAssignment.challenge.type === 'winrate'
+                                    ? `${progress.current?.toFixed(1)}% (${progress.tradesCompleted}/${progress.tradesRequired} trades)`
+                                    : progress.current
+                                }
+                                {' '}
+                                <span className={`${
+                                  progress.status === 'completed' ? 'text-green-600' :
+                                  progress.status === 'failed' ? 'text-red-600' :
+                                  'text-blue-600'
+                                }`}>
+                                  ({progress.status === 'completed' ? '✓ Complete' :
+                                    progress.status === 'failed' ? '✗ Failed' :
+                                    `${Math.round(progress.progress)}%`})
+                                </span>
+                              </p>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
+
+                    {/* Mentee Notes */}
+                    {viewingAssignment.menteeNotes && (
+                      <div className="bg-blue-50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-blue-700 mb-1">Mentee's Notes</h4>
+                        <p className="text-blue-900 whitespace-pre-wrap">{viewingAssignment.menteeNotes}</p>
+                      </div>
+                    )}
+
+                    {/* Mentor Review */}
+                    {viewingAssignment.status === 'completed' && !viewingAssignment.mentorReview && (
+                      <div className="border-t border-gray-200 pt-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">Add Your Review</h4>
+                        <textarea
+                          value={reviewText}
+                          onChange={(e) => setReviewText(e.target.value)}
+                          placeholder="Provide feedback on their work..."
+                          rows={3}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        <button
+                          onClick={() => handleAddReview(viewingAssignment.id)}
+                          disabled={!reviewText.trim()}
+                          className="mt-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                        >
+                          Submit Review
+                        </button>
+                      </div>
+                    )}
+
+                    {viewingAssignment.mentorReview && (
+                      <div className="bg-purple-50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-purple-700 mb-1">Your Review</h4>
+                        <p className="text-purple-900 whitespace-pre-wrap">{viewingAssignment.mentorReview}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============================================================================
     // MENTEES PAGE (FOR MENTORS)
     // =============================================================================
     function MenteesPage({ userProfile, isMobile }) {
@@ -8852,6 +9932,10 @@
       // Feedback state
       const [tradeFeedback, setTradeFeedback] = useState([]);
       const [tradeFlags, setTradeFlags] = useState([]);
+      
+      // Assignments state
+      const [assignments, setAssignments] = useState([]);
+      const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
 
       // Journal tabs for mentor view
       const journalTabs = [
@@ -8861,6 +9945,7 @@
         { id: 'goals', label: 'Goals', icon: 'goals' },
         { id: 'setups', label: 'Setups', icon: 'setups' },
         { id: 'mistakes', label: 'Mistakes', icon: 'mistakes' },
+        { id: 'assignments', label: 'Assignments', icon: 'assignments' },
       ];
 
       // Load mentees
@@ -8882,11 +9967,12 @@
         return () => unsubscribe();
       }, [userProfile?.uid]);
 
-      // Load feedback when mentee selected
+      // Load feedback and assignments when mentee selected
       useEffect(() => {
         if (!selectedMentee?.id) {
           setTradeFeedback([]);
           setTradeFlags([]);
+          setAssignments([]);
           return;
         }
 
@@ -8907,9 +9993,19 @@
             setTradeFlags(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           });
 
+        // Subscribe to assignments
+        const unsubAssignments = db.collection('users')
+          .doc(selectedMentee.id)
+          .collection('assignments')
+          .orderBy('createdAt', 'desc')
+          .onSnapshot((snapshot) => {
+            setAssignments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
         return () => {
           unsubFeedback();
           unsubFlags();
+          unsubAssignments();
         };
       }, [selectedMentee?.id]);
 
@@ -9018,6 +10114,149 @@
         } catch (err) {
           console.error('Failed to toggle flag status:', err);
           return false;
+        }
+      };
+
+      // Create assignment
+      const createAssignment = async (assignmentData) => {
+        if (!selectedMentee?.id) return false;
+
+        try {
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('assignments')
+            .add({
+              ...assignmentData,
+              mentorId: userProfile.uid,
+              mentorName: userProfile.displayName,
+              status: 'assigned',
+              menteeNotes: '',
+              mentorReview: null,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              completedAt: null,
+            });
+          return true;
+        } catch (err) {
+          console.error('Failed to create assignment:', err);
+          return false;
+        }
+      };
+
+      // Update assignment (for mentor review)
+      const updateAssignment = async (assignmentId, updates) => {
+        if (!selectedMentee?.id) return false;
+
+        try {
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('assignments')
+            .doc(assignmentId)
+            .update({
+              ...updates,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          return true;
+        } catch (err) {
+          console.error('Failed to update assignment:', err);
+          return false;
+        }
+      };
+
+      // Delete assignment
+      const deleteAssignment = async (assignmentId) => {
+        if (!selectedMentee?.id) return false;
+
+        try {
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('assignments')
+            .doc(assignmentId)
+            .delete();
+          return true;
+        } catch (err) {
+          console.error('Failed to delete assignment:', err);
+          return false;
+        }
+      };
+
+      // Calculate challenge progress
+      const calculateChallengeProgress = (challenge, trades) => {
+        if (!challenge || !trades) return { current: 0, progress: 0, status: 'active' };
+
+        const startDate = challenge.startDate;
+        const endDate = challenge.endDate || todayISO();
+        
+        // Filter trades within date range
+        const relevantTrades = trades.filter(t => 
+          t.entryDate >= startDate && t.entryDate <= endDate
+        ).map(t => ({ ...t, derived: calcTradeDerived(t) }));
+
+        const closedTrades = relevantTrades.filter(t => !t.derived.isOpen);
+
+        switch (challenge.type) {
+          case 'profit':
+            const totalPnL = closedTrades.reduce((sum, t) => sum + (t.derived.pnlFinal || 0), 0);
+            return { 
+              current: totalPnL, 
+              progress: Math.min(100, (totalPnL / challenge.target) * 100),
+              status: totalPnL >= challenge.target ? 'completed' : 'active'
+            };
+            
+          case 'winrate':
+            const wins = closedTrades.filter(t => t.derived.winLoss === 'W');
+            const winRate = closedTrades.length > 0 ? (wins.length / closedTrades.length) * 100 : 0;
+            const tradesNeeded = challenge.tradesRequired || 20;
+            return { 
+              current: winRate,
+              tradesCompleted: closedTrades.length,
+              tradesRequired: tradesNeeded,
+              progress: Math.min(100, (closedTrades.length / tradesNeeded) * 100),
+              status: closedTrades.length >= tradesNeeded ? (winRate >= challenge.target ? 'completed' : 'failed') : 'active'
+            };
+            
+          case 'trades':
+            return { 
+              current: relevantTrades.length, 
+              progress: Math.min(100, (relevantTrades.length / challenge.target) * 100),
+              status: relevantTrades.length >= challenge.target ? 'completed' : 'active'
+            };
+            
+          case 'streak':
+            // Calculate consecutive profitable days
+            const dailyPnL = {};
+            closedTrades.forEach(t => {
+              const date = t.exitDate || t.entryDate;
+              dailyPnL[date] = (dailyPnL[date] || 0) + (t.derived.pnlFinal || 0);
+            });
+            const sortedDays = Object.keys(dailyPnL).sort();
+            let maxStreak = 0, currentStreak = 0;
+            sortedDays.forEach(day => {
+              if (dailyPnL[day] > 0) {
+                currentStreak++;
+                maxStreak = Math.max(maxStreak, currentStreak);
+              } else {
+                currentStreak = 0;
+              }
+            });
+            return { 
+              current: maxStreak, 
+              progress: Math.min(100, (maxStreak / challenge.target) * 100),
+              status: maxStreak >= challenge.target ? 'completed' : 'active'
+            };
+            
+          case 'max_loss':
+            const losses = closedTrades.filter(t => (t.derived.pnlFinal || 0) < 0);
+            const maxLoss = losses.length > 0 ? Math.min(...losses.map(t => t.derived.pnlFinal)) : 0;
+            const withinLimit = Math.abs(maxLoss) <= challenge.target;
+            return { 
+              current: maxLoss, 
+              progress: withinLimit ? 100 : 0,
+              status: withinLimit ? 'active' : 'failed'
+            };
+            
+          default:
+            return { current: 0, progress: 0, status: 'active' };
         }
       };
 
@@ -9249,6 +10488,19 @@
                 setState={readOnlySetState}
                 isMobile={isMobile}
                 isReadOnly={true}
+              />
+            );
+          case 'assignments':
+            return (
+              <MentorAssignmentsTab
+                assignments={assignments}
+                menteeData={menteeData}
+                selectedMentee={selectedMentee}
+                onCreateAssignment={createAssignment}
+                onUpdateAssignment={updateAssignment}
+                onDeleteAssignment={deleteAssignment}
+                calculateChallengeProgress={calculateChallengeProgress}
+                isMobile={isMobile}
               />
             );
           default:
@@ -9546,6 +10798,9 @@
       // Feedback state for mentees
       const [myTradeFeedback, setMyTradeFeedback] = useState([]);
       const [myTradeFlags, setMyTradeFlags] = useState([]);
+      
+      // Assignments state for mentees
+      const [myAssignments, setMyAssignments] = useState([]);
 
       // Listen for auth state changes
       useEffect(() => {
@@ -9568,11 +10823,12 @@
         return () => unsubscribe();
       }, []);
 
-      // Load feedback for mentees (users with a mentor)
+      // Load feedback and assignments for mentees (users with a mentor)
       useEffect(() => {
         if (!user || !userProfile?.mentorId) {
           setMyTradeFeedback([]);
           setMyTradeFlags([]);
+          setMyAssignments([]);
           return;
         }
 
@@ -9593,11 +10849,41 @@
             setMyTradeFlags(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           });
 
+        // Subscribe to assignments
+        const unsubAssignments = db.collection('users')
+          .doc(user.uid)
+          .collection('assignments')
+          .orderBy('createdAt', 'desc')
+          .onSnapshot((snapshot) => {
+            setMyAssignments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
         return () => {
           unsubFeedback();
           unsubFlags();
+          unsubAssignments();
         };
       }, [user, userProfile?.mentorId]);
+
+      // Update assignment (for mentee)
+      const updateMyAssignment = async (assignmentId, updates) => {
+        if (!user) return false;
+
+        try {
+          await db.collection('users')
+            .doc(user.uid)
+            .collection('assignments')
+            .doc(assignmentId)
+            .update({
+              ...updates,
+              updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          return true;
+        } catch (err) {
+          console.error('Failed to update assignment:', err);
+          return false;
+        }
+      };
 
       // Mark feedback as read when mentee views it
       const markFeedbackAsRead = async (feedbackIds) => {
@@ -9830,9 +11116,23 @@
       }
 
       // Build nav items based on role
-      const navItems = userProfile?.role === 'mentor' 
-        ? [...NAV_ITEMS, { id: 'mentees', label: 'Mentees', icon: 'mentees' }]
-        : NAV_ITEMS;
+      const navItems = useMemo(() => {
+        let items = [...NAV_ITEMS];
+        
+        // Add Assignments for mentees (users with a mentor)
+        if (userProfile?.mentorId) {
+          // Insert after Goals
+          const goalsIndex = items.findIndex(i => i.id === 'goals');
+          items.splice(goalsIndex + 1, 0, { id: 'assignments', label: 'Assignments', icon: 'assignments' });
+        }
+        
+        // Add Mentees for mentors
+        if (userProfile?.role === 'mentor') {
+          items.push({ id: 'mentees', label: 'Mentees', icon: 'mentees' });
+        }
+        
+        return items;
+      }, [userProfile?.role, userProfile?.mentorId]);
 
       const renderPage = () => {
         // Show mentor invite banner for traders
@@ -9849,6 +11149,8 @@
             return <>{inviteBanner}<CalendarPage state={journalState} setState={saveJournalState} selectedDate={selectedDate} setSelectedDate={setSelectedDate} isMobile={isMobile} /></>;
           case 'goals':
             return <>{inviteBanner}<GoalsPage state={journalState} setState={saveJournalState} isMobile={isMobile} /></>;
+          case 'assignments':
+            return <>{inviteBanner}<AssignmentsPage assignments={myAssignments} journalState={journalState} userProfile={userProfile} isMobile={isMobile} onUpdateAssignment={updateMyAssignment} /></>;
           case 'setups':
             return <>{inviteBanner}<SetupsPage state={journalState} setState={saveJournalState} isMobile={isMobile} /></>;
           case 'mistakes':
