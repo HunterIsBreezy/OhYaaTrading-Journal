@@ -12338,15 +12338,6 @@
             }
           });
 
-          // Check if weekly check-in is needed for current week
-          const hasCurrentWeekCheckin = checkins.some(c => c.weekStart === currentWeek.start);
-          if (!hasCurrentWeekCheckin && mentee.status === 'active') {
-            menteesNeedingCheckin.push({
-              ...mentee,
-              weekStats: calculateWeekStats(trades, currentWeek.start, currentWeek.end),
-            });
-          }
-
           // Calculate this week's stats for this mentee
           const weekStats = calculateWeekStats(trades, currentWeek.start, currentWeek.end);
           totalTradesThisWeek += weekStats.totalTrades;
