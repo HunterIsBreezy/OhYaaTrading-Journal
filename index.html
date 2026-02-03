@@ -11627,20 +11627,33 @@
             });
           unsubscribers.push(unsubCheckins);
 
-          // Subscribe to trade questions
+          // Subscribe to trade questions (with error handling)
           const unsubQuestions = db.collection('users')
             .doc(mentee.id)
             .collection('tradeQuestions')
             .orderBy('createdAt', 'desc')
-            .onSnapshot((snapshot) => {
-              setAllMenteeData(prev => ({
-                ...prev,
-                [mentee.id]: {
-                  ...prev[mentee.id],
-                  questions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
-                }
-              }));
-            });
+            .onSnapshot(
+              (snapshot) => {
+                setAllMenteeData(prev => ({
+                  ...prev,
+                  [mentee.id]: {
+                    ...prev[mentee.id],
+                    questions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                  }
+                }));
+              },
+              (error) => {
+                console.log('Trade questions subscription error (update Firestore rules):', error.message);
+                // Set empty questions array on error so it doesn't break the app
+                setAllMenteeData(prev => ({
+                  ...prev,
+                  [mentee.id]: {
+                    ...prev[mentee.id],
+                    questions: [],
+                  }
+                }));
+              }
+            );
           unsubscribers.push(unsubQuestions);
         });
 
@@ -11696,14 +11709,20 @@
             setWeeklyCheckins(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           });
 
-        // Subscribe to trade questions
+        // Subscribe to trade questions (with error handling)
         const unsubQuestions = db.collection('users')
           .doc(selectedMentee.id)
           .collection('tradeQuestions')
           .orderBy('createdAt', 'desc')
-          .onSnapshot((snapshot) => {
-            setTradeQuestions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-          });
+          .onSnapshot(
+            (snapshot) => {
+              setTradeQuestions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            },
+            (error) => {
+              console.log('Trade questions error (update Firestore rules):', error.message);
+              setTradeQuestions([]);
+            }
+          );
 
         return () => {
           unsubFeedback();
@@ -13228,14 +13247,20 @@
             setMyTradeFlags(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           });
 
-        // Subscribe to trade questions
+        // Subscribe to trade questions (with error handling)
         const unsubQuestions = db.collection('users')
           .doc(user.uid)
           .collection('tradeQuestions')
           .orderBy('createdAt', 'desc')
-          .onSnapshot((snapshot) => {
-            setMyTradeQuestions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-          });
+          .onSnapshot(
+            (snapshot) => {
+              setMyTradeQuestions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            },
+            (error) => {
+              console.log('Trade questions error (update Firestore rules):', error.message);
+              setMyTradeQuestions([]);
+            }
+          );
 
         // Subscribe to assignments
         const unsubAssignments = db.collection('users')
