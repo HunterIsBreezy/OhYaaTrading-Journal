@@ -647,7 +647,7 @@
     }
 
     // Calculate week stats from trades
-    function calculateWeekStats(trades, weekStart, weekEnd) {
+    function calculateWeekStats(trades, weekStart, weekEnd, setups = [], mistakes = []) {
       const weekTrades = trades.filter(t => {
         const date = t.exitDate || t.entryDate;
         return date >= weekStart && date <= weekEnd;
@@ -655,14 +655,173 @@
 
       const closedTrades = weekTrades.filter(t => !t.derived.isOpen);
       const wins = closedTrades.filter(t => t.derived.winLoss === 'W');
+      const losses = closedTrades.filter(t => t.derived.winLoss === 'L');
       const pnls = closedTrades.map(t => t.derived.pnlFinal || 0);
       
+      const totalPnL = closedTrades.reduce((sum, t) => sum + (t.derived.pnlFinal || 0), 0);
+      const winRate = closedTrades.length > 0 ? ((wins.length / closedTrades.length) * 100) : 0;
+
+      // Best and worst trades
+      const bestTrade = closedTrades.length > 0
+        ? closedTrades.reduce((best, t) => (t.derived.pnlFinal || 0) > (best.derived.pnlFinal || 0) ? t : best, closedTrades[0])
+        : null;
+      const worstTrade = closedTrades.length > 0
+        ? closedTrades.reduce((worst, t) => (t.derived.pnlFinal || 0) < (worst.derived.pnlFinal || 0) ? t : worst, closedTrades[0])
+        : null;
+
+      // Avg win/loss and R:R ratio
+      const avgWin = wins.length > 0 
+        ? wins.reduce((sum, t) => sum + (t.derived.pnlFinal || 0), 0) / wins.length 
+        : 0;
+      const avgLoss = losses.length > 0 
+        ? Math.abs(losses.reduce((sum, t) => sum + (t.derived.pnlFinal || 0), 0) / losses.length)
+        : 0;
+      const riskRewardRatio = avgLoss > 0 ? (avgWin / avgLoss).toFixed(2) : avgWin > 0 ? '∞' : '0.00';
+
+      // Average rating
+      const ratedTrades = closedTrades.filter(t => t.rating && t.rating > 0);
+      const avgRating = ratedTrades.length > 0
+        ? ratedTrades.reduce((sum, t) => sum + t.rating, 0) / ratedTrades.length
+        : 0;
+
+      // P&L by Asset Type
+      const pnlByAsset = {};
+      closedTrades.forEach(t => {
+        const asset = ASSET_TYPES.find(a => a.id === t.assetType)?.label || t.assetType || 'Unknown';
+        if (!pnlByAsset[asset]) pnlByAsset[asset] = 0;
+        pnlByAsset[asset] += t.derived.pnlFinal || 0;
+      });
+      const assetPieData = Object.entries(pnlByAsset).map(([label, value]) => ({ label, value }));
+
+      // P&L by Ticker
+      const pnlByTicker = {};
+      closedTrades.forEach(t => {
+        if (!pnlByTicker[t.ticker]) pnlByTicker[t.ticker] = 0;
+        pnlByTicker[t.ticker] += t.derived.pnlFinal || 0;
+      });
+      const tickerPnLData = Object.entries(pnlByTicker)
+        .map(([label, value]) => ({ label, value }))
+        .sort((a, b) => b.value - a.value);
+
+      // Individual trade P&L
+      const tradePnLData = closedTrades.map(t => ({
+        label: t.ticker,
+        value: t.derived.pnlFinal || 0,
+      }));
+
+      // Setup usage and success
+      const setupStats = {};
+      closedTrades.forEach(t => {
+        if (!t.setupId) return;
+        const setup = setups.find(s => s.id === t.setupId);
+        if (!setup) return;
+        
+        if (!setupStats[setup.id]) {
+          setupStats[setup.id] = { id: setup.id, name: setup.name, wins: 0, losses: 0, total: 0, totalPnL: 0 };
+        }
+        setupStats[setup.id].total++;
+        setupStats[setup.id].totalPnL += t.derived.pnlFinal || 0;
+        if (t.derived.winLoss === 'W') setupStats[setup.id].wins++;
+        if (t.derived.winLoss === 'L') setupStats[setup.id].losses++;
+      });
+      const setupData = Object.values(setupStats).map(s => ({
+        ...s,
+        winRate: s.total > 0 ? ((s.wins / s.total) * 100).toFixed(0) : 0,
+      })).sort((a, b) => b.total - a.total);
+
+      // Mistake analytics
+      const mistakeStats = {};
+      closedTrades.forEach(t => {
+        if (!t.mistakeIds || t.mistakeIds.length === 0) return;
+        const pnl = t.derived.pnlFinal || 0;
+        
+        t.mistakeIds.forEach(mistakeId => {
+          const mistake = mistakes.find(m => m.id === mistakeId);
+          if (!mistake) return;
+          
+          if (!mistakeStats[mistakeId]) {
+            mistakeStats[mistakeId] = {
+              id: mistakeId,
+              name: mistake.name,
+              totalOccurrences: 0,
+              losingTrades: 0,
+              profitableTrades: 0,
+              totalLossAmount: 0,
+            };
+          }
+          mistakeStats[mistakeId].totalOccurrences++;
+          if (pnl < 0) {
+            mistakeStats[mistakeId].losingTrades++;
+            mistakeStats[mistakeId].totalLossAmount += pnl;
+          } else {
+            mistakeStats[mistakeId].profitableTrades++;
+          }
+        });
+      });
+      const mistakeData = Object.values(mistakeStats).sort((a, b) => b.totalOccurrences - a.totalOccurrences);
+      const totalMistakeOccurrences = mistakeData.reduce((sum, m) => sum + m.totalOccurrences, 0);
+      const totalMistakeLoss = mistakeData.reduce((sum, m) => sum + m.totalLossAmount, 0);
+
+      // Daily P&L breakdown
+      const dailyPnL = {};
+      closedTrades.forEach(t => {
+        const date = t.exitDate || t.entryDate;
+        if (!dailyPnL[date]) dailyPnL[date] = { pnl: 0, trades: 0, wins: 0 };
+        dailyPnL[date].pnl += t.derived.pnlFinal || 0;
+        dailyPnL[date].trades++;
+        if (t.derived.winLoss === 'W') dailyPnL[date].wins++;
+      });
+      const dailyBreakdown = Object.entries(dailyPnL)
+        .map(([date, data]) => ({ 
+          date, 
+          ...data,
+          winRate: data.trades > 0 ? ((data.wins / data.trades) * 100).toFixed(0) : 0,
+        }))
+        .sort((a, b) => a.date.localeCompare(b.date));
+
+      const greenDays = dailyBreakdown.filter(d => d.pnl > 0).length;
+      const redDays = dailyBreakdown.filter(d => d.pnl < 0).length;
+      const tradingDays = dailyBreakdown.length;
+
       return {
+        // Core stats
         totalTrades: closedTrades.length,
-        winRate: closedTrades.length > 0 ? (wins.length / closedTrades.length) * 100 : 0,
-        totalPnL: closedTrades.reduce((sum, t) => sum + (t.derived.pnlFinal || 0), 0),
+        totalPnL,
+        winRate,
+        wins: wins.length,
+        losses: losses.length,
+        
+        // Trade stats
         biggestWin: pnls.length > 0 ? Math.max(0, ...pnls) : 0,
         biggestLoss: pnls.length > 0 ? Math.min(0, ...pnls) : 0,
+        bestTrade,
+        worstTrade,
+        avgWin,
+        avgLoss,
+        riskRewardRatio,
+        
+        // Rating
+        avgRating,
+        ratedTradesCount: ratedTrades.length,
+        
+        // Breakdowns
+        assetPieData,
+        tickerPnLData,
+        tradePnLData,
+        setupData,
+        mistakeData,
+        totalMistakeOccurrences,
+        totalMistakeLoss,
+        
+        // Daily breakdown
+        dailyBreakdown,
+        tradingDays,
+        greenDays,
+        redDays,
+        
+        // All trades for the week (for trade log display)
+        trades: weekTrades,
+        closedTradesList: closedTrades,
       };
     }
 
@@ -9008,22 +9167,157 @@
               </div>
               <div className="p-6 space-y-4">
                 {/* Stats */}
-                {latestCheckin.stats && (
-                  <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-900">{latestCheckin.stats.totalTrades}</p>
-                      <p className="text-xs text-gray-500">Trades</p>
+                {latestCheckin.stats && latestCheckin.stats.totalTrades > 0 && (
+                  <div className="space-y-4">
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-[10px] font-medium text-gray-500 mb-1">Week P&L</p>
+                        <p className={`text-lg font-bold ${(latestCheckin.stats.totalPnL || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {formatCurrency(latestCheckin.stats.totalPnL || 0)}
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-[10px] font-medium text-gray-500 mb-1"># Trades</p>
+                        <p className="text-lg font-bold text-gray-900">{latestCheckin.stats.totalTrades}</p>
+                        <p className="text-[10px] text-gray-500">{latestCheckin.stats.tradingDays || 0} days</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-[10px] font-medium text-gray-500 mb-1">Win Rate</p>
+                        <p className="text-lg font-bold text-gray-900">{(latestCheckin.stats.winRate || 0).toFixed(0)}%</p>
+                        <p className="text-[10px] text-gray-500">
+                          <span className="text-emerald-600">{latestCheckin.stats.wins || 0}W</span>
+                          {' / '}
+                          <span className="text-red-600">{latestCheckin.stats.losses || 0}L</span>
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-[10px] font-medium text-gray-500 mb-1">R:R Ratio</p>
+                        <p className="text-lg font-bold text-gray-900">{latestCheckin.stats.riskRewardRatio || '0.00'}:1</p>
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-gray-900">{(latestCheckin.stats.winRate || 0).toFixed(0)}%</p>
-                      <p className="text-xs text-gray-500">Win Rate</p>
+
+                    {/* Second row */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-[10px] font-medium text-gray-500 mb-1">Avg Win</p>
+                        <p className="text-lg font-bold text-emerald-600">{formatCurrencyShort(latestCheckin.stats.avgWin || 0)}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-[10px] font-medium text-gray-500 mb-1">Avg Loss</p>
+                        <p className="text-lg font-bold text-red-600">-{formatCurrencyShort(latestCheckin.stats.avgLoss || 0)}</p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-[10px] font-medium text-gray-500 mb-1">Days</p>
+                        <p className="text-lg font-bold text-gray-900">
+                          <span className="text-emerald-600">{latestCheckin.stats.greenDays || 0}🟢</span>
+                          {' '}
+                          <span className="text-red-600">{latestCheckin.stats.redDays || 0}🔴</span>
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-[10px] font-medium text-gray-500 mb-1">Avg Rating</p>
+                        {latestCheckin.stats.ratedTradesCount > 0 ? (
+                          <div className="flex items-center gap-1">
+                            <span className="text-lg font-bold text-gray-900">{(latestCheckin.stats.avgRating || 0).toFixed(1)}</span>
+                            <span className="text-amber-400">★</span>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400">No ratings</p>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-center">
-                      <p className={`text-2xl font-bold ${(latestCheckin.stats.totalPnL || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                        {formatCurrency(latestCheckin.stats.totalPnL || 0)}
-                      </p>
-                      <p className="text-xs text-gray-500">P&L</p>
-                    </div>
+
+                    {/* Daily Breakdown */}
+                    {latestCheckin.stats.dailyBreakdown && latestCheckin.stats.dailyBreakdown.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs font-medium text-gray-700 mb-2">📅 Daily Breakdown</p>
+                        <div className="space-y-1">
+                          {latestCheckin.stats.dailyBreakdown.map(day => (
+                            <div key={day.date} className="flex items-center justify-between text-sm">
+                              <span className="text-gray-600">{new Date(day.date + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</span>
+                              <div className="flex items-center gap-3">
+                                <span className="text-gray-500">{day.trades} trades</span>
+                                <span className="text-gray-500">{day.winRate}% WR</span>
+                                <span className={`font-medium ${day.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  {formatCurrency(day.pnl)}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Setups Used */}
+                    {latestCheckin.stats.setupData && latestCheckin.stats.setupData.length > 0 && (
+                      <div className="bg-gray-50 rounded-lg p-3">
+                        <p className="text-xs font-medium text-gray-700 mb-2">🎯 Setups Used</p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-xs text-gray-500">
+                                <th className="pb-1">Setup</th>
+                                <th className="pb-1 text-center">Trades</th>
+                                <th className="pb-1 text-center">W/L</th>
+                                <th className="pb-1 text-center">WR</th>
+                                <th className="pb-1 text-right">P&L</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-200">
+                              {latestCheckin.stats.setupData.map(s => (
+                                <tr key={s.id}>
+                                  <td className="py-1 font-medium text-gray-900">{s.name}</td>
+                                  <td className="py-1 text-center text-gray-600">{s.total}</td>
+                                  <td className="py-1 text-center">
+                                    <span className="text-emerald-600">{s.wins}</span>/<span className="text-red-600">{s.losses}</span>
+                                  </td>
+                                  <td className="py-1 text-center text-gray-600">{s.winRate}%</td>
+                                  <td className={`py-1 text-right font-medium ${s.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                    {formatCurrency(s.totalPnL)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Mistakes */}
+                    {latestCheckin.stats.mistakeData && latestCheckin.stats.mistakeData.length > 0 && (
+                      <div className="bg-red-50 rounded-lg p-3">
+                        <p className="text-xs font-medium text-red-700 mb-2">
+                          ⚠️ Mistakes ({latestCheckin.stats.totalMistakeOccurrences || 0} occurrences, {formatCurrency(latestCheckin.stats.totalMistakeLoss || 0)} cost)
+                        </p>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="text-left text-xs text-red-600">
+                                <th className="pb-1">Mistake</th>
+                                <th className="pb-1 text-center">Count</th>
+                                <th className="pb-1 text-center">Loss/Win</th>
+                                <th className="pb-1 text-right">Cost</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-red-100">
+                              {latestCheckin.stats.mistakeData.map(m => (
+                                <tr key={m.id}>
+                                  <td className="py-1 font-medium text-gray-900">{m.name}</td>
+                                  <td className="py-1 text-center text-gray-600">{m.totalOccurrences}</td>
+                                  <td className="py-1 text-center">
+                                    <span className="text-red-600">{m.losingTrades}</span>/<span className="text-emerald-600">{m.profitableTrades}</span>
+                                  </td>
+                                  <td className="py-1 text-right font-medium text-red-600">
+                                    {formatCurrency(m.totalLossAmount)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -10199,6 +10493,7 @@
       selectedMentee,
       onCreateCheckin, 
       onDeleteCheckin,
+      onCreateAssignment,
       isMobile 
     }) {
       const [modalOpen, setModalOpen] = useState(false);
@@ -10213,13 +10508,34 @@
         focusForNextWeek: '',
       });
 
+      // Assignment form state
+      const [showAssignmentForm, setShowAssignmentForm] = useState(false);
+      const [assignmentData, setAssignmentData] = useState({
+        title: '',
+        description: '',
+        type: 'homework',
+        dueDate: '',
+        hasChallenge: false,
+        challengeType: 'profit',
+        challengeTarget: '',
+        challengeTradesRequired: 10,
+        challengeStartDate: todayISO(),
+        challengeEndDate: '',
+      });
+
       const recentWeeks = getRecentWeeks(12);
 
-      // Calculate stats for selected week
+      // Calculate stats for selected week (including setups and mistakes)
       const weekStats = useMemo(() => {
         if (!menteeData?.trades) return null;
-        return calculateWeekStats(menteeData.trades, selectedWeek.start, selectedWeek.end);
-      }, [menteeData?.trades, selectedWeek]);
+        return calculateWeekStats(
+          menteeData.trades, 
+          selectedWeek.start, 
+          selectedWeek.end,
+          menteeData.setups || [],
+          menteeData.mistakes || []
+        );
+      }, [menteeData?.trades, menteeData?.setups, menteeData?.mistakes, selectedWeek]);
 
       const resetForm = () => {
         setFormData({
@@ -10229,6 +10545,19 @@
           focusForNextWeek: '',
         });
         setEditingCheckin(null);
+        setShowAssignmentForm(false);
+        setAssignmentData({
+          title: '',
+          description: '',
+          type: 'homework',
+          dueDate: '',
+          hasChallenge: false,
+          challengeType: 'profit',
+          challengeTarget: '',
+          challengeTradesRequired: 10,
+          challengeStartDate: todayISO(),
+          challengeEndDate: '',
+        });
       };
 
       const openNewCheckin = () => {
@@ -10361,7 +10690,7 @@
             <div className="fixed inset-0 z-50 overflow-y-auto">
               <div className="fixed inset-0 bg-black/50" onClick={() => { setModalOpen(false); resetForm(); }} />
               <div className="relative min-h-screen flex items-center justify-center p-4">
-                <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                <div className="relative bg-white rounded-xl shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
                   <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
                     <h2 className="text-lg font-semibold text-gray-900">
                       {editingCheckin ? 'Edit Check-in' : 'New Weekly Check-in'}
@@ -10387,38 +10716,315 @@
                       </select>
                     </div>
 
-                    {/* Week Stats */}
-                    {weekStats && (
-                      <div className="bg-gray-50 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-gray-700 mb-2">📊 Week Stats</h4>
-                        <div className="grid grid-cols-3 gap-4 text-center">
-                          <div>
-                            <p className="text-2xl font-bold text-gray-900">{weekStats.totalTrades}</p>
-                            <p className="text-xs text-gray-500">Trades</p>
-                          </div>
-                          <div>
-                            <p className="text-2xl font-bold text-gray-900">{weekStats.winRate.toFixed(0)}%</p>
-                            <p className="text-xs text-gray-500">Win Rate</p>
-                          </div>
-                          <div>
-                            <p className={`text-2xl font-bold ${weekStats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                              {formatCurrency(weekStats.totalPnL)}
+                    {/* Week Stats - Exact Calendar View Layout */}
+                    {weekStats && weekStats.totalTrades > 0 ? (
+                      <div className="space-y-4">
+                        {/* Summary Cards - 7 columns like calendar */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-2">
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3">
+                            <p className="text-[10px] font-medium text-gray-500 mb-1 truncate">Week P&L</p>
+                            <p className={`text-lg font-bold truncate ${weekStats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {formatCurrencyShort(weekStats.totalPnL)}
                             </p>
-                            <p className="text-xs text-gray-500">P&L</p>
+                          </div>
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3">
+                            <p className="text-[10px] font-medium text-gray-500 mb-1 truncate"># Trades</p>
+                            <p className="text-lg font-bold text-gray-900">{weekStats.totalTrades}</p>
+                            <p className="text-[10px] text-gray-500 mt-1 truncate">{weekStats.tradingDays} days traded</p>
+                          </div>
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3">
+                            <p className="text-[10px] font-medium text-gray-500 mb-1 truncate">Win Rate</p>
+                            <p className="text-lg font-bold text-gray-900">{weekStats.winRate.toFixed(1)}%</p>
+                            <p className="text-[10px] text-gray-500 mt-1 truncate">
+                              <span className="text-emerald-600">{weekStats.wins}W</span>
+                              {' / '}
+                              <span className="text-red-600">{weekStats.losses}L</span>
+                            </p>
+                          </div>
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3">
+                            <p className="text-[10px] font-medium text-gray-500 mb-1 truncate">R:R</p>
+                            <p className="text-lg font-bold text-gray-900">{weekStats.riskRewardRatio}:1</p>
+                            <p className="text-[10px] text-gray-500 mt-1 truncate">
+                              {formatCurrencyShort(weekStats.avgWin)}/{formatCurrencyShort(weekStats.avgLoss)}
+                            </p>
+                          </div>
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3">
+                            <p className="text-[10px] font-medium text-gray-500 mb-1 truncate">Avg Win</p>
+                            <p className="text-lg font-bold text-emerald-600 truncate">+{formatCurrencyShort(weekStats.avgWin)}</p>
+                            <p className="text-[10px] text-gray-500 mt-1 truncate">{weekStats.wins} win{weekStats.wins !== 1 ? 's' : ''}</p>
+                          </div>
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3">
+                            <p className="text-[10px] font-medium text-gray-500 mb-1 truncate">Avg Loss</p>
+                            <p className="text-lg font-bold text-red-600 truncate">-{formatCurrencyShort(weekStats.avgLoss)}</p>
+                            <p className="text-[10px] text-gray-500 mt-1 truncate">{weekStats.losses} loss{weekStats.losses !== 1 ? 'es' : ''}</p>
+                          </div>
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3">
+                            <p className="text-[10px] font-medium text-gray-500 mb-1 truncate">Avg Rating</p>
+                            {weekStats.ratedTradesCount > 0 ? (
+                              <>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-lg font-bold text-gray-900">{weekStats.avgRating.toFixed(1)}</span>
+                                  <span className="text-amber-400">★</span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1 truncate">{weekStats.ratedTradesCount} rated</p>
+                              </>
+                            ) : (
+                              <p className="text-xs text-gray-400 italic">No ratings</p>
+                            )}
                           </div>
                         </div>
-                        <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-200">
-                          <div className="text-center">
-                            <p className="text-sm font-medium text-emerald-600">{formatCurrency(weekStats.biggestWin)}</p>
-                            <p className="text-xs text-gray-500">Biggest Win</p>
+
+                        {/* Charts Row - 4 columns like calendar */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {/* P&L by Asset Type */}
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">P&L by Asset</h3>
+                            <SimplePieChart data={weekStats.assetPieData} />
                           </div>
-                          <div className="text-center">
-                            <p className="text-sm font-medium text-red-600">{formatCurrency(weekStats.biggestLoss)}</p>
-                            <p className="text-xs text-gray-500">Biggest Loss</p>
+
+                          {/* P&L by Ticker */}
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">P&L by Ticker</h3>
+                            <SimpleBarChart data={weekStats.tickerPnLData} />
+                          </div>
+
+                          {/* Trade P&L Distribution */}
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Trade P&L</h3>
+                            <SimpleBarChart data={weekStats.tradePnLData} />
+                          </div>
+
+                          {/* Setups Used */}
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                            <h3 className="text-sm font-semibold text-gray-900 mb-3">Setups Used</h3>
+                            <SetupBarChart data={weekStats.setupData} />
                           </div>
                         </div>
+
+                        {/* Setups Analysis Table */}
+                        {weekStats.setupData && weekStats.setupData.length > 0 && (
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                              <h3 className="text-sm font-semibold text-gray-900">Setups Used on Week of {formatWeekRange(selectedWeek.start, selectedWeek.end)}</h3>
+                            </div>
+                            <div className="p-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                {/* Setup Pie Chart */}
+                                <div>
+                                  <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">By Trade Count</h4>
+                                  <SimplePieChart data={weekStats.setupData.map(s => ({ label: s.name, value: s.total }))} />
+                                </div>
+                                {/* Setup P&L Bar Chart */}
+                                <div>
+                                  <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">By P&L</h4>
+                                  <SimpleBarChart data={weekStats.setupData.map(s => ({ label: s.name, value: s.totalPnL }))} />
+                                </div>
+                              </div>
+                              {/* Setup Details Table */}
+                              <div className="mt-4 pt-4 border-t border-gray-100">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="text-left text-xs text-gray-500 uppercase">
+                                      <th className="pb-2">Setup</th>
+                                      <th className="pb-2 text-center">Trades</th>
+                                      <th className="pb-2 text-center">W/L</th>
+                                      <th className="pb-2 text-center">Win Rate</th>
+                                      <th className="pb-2 text-right">P&L</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {weekStats.setupData.map(s => (
+                                      <tr key={s.id}>
+                                        <td className="py-2 font-medium text-gray-900">{s.name}</td>
+                                        <td className="py-2 text-center text-gray-600">{s.total}</td>
+                                        <td className="py-2 text-center">
+                                          <span className="text-emerald-600">{s.wins}W</span>
+                                          {' / '}
+                                          <span className="text-red-600">{s.losses}L</span>
+                                        </td>
+                                        <td className="py-2 text-center text-gray-600">{s.winRate}%</td>
+                                        <td className={`py-2 text-right font-semibold ${s.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                          {formatCurrency(s.totalPnL)}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Mistakes Analysis */}
+                        {weekStats.mistakeData && weekStats.mistakeData.length > 0 && (
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                              <div className="flex items-center justify-between">
+                                <h3 className="text-sm font-semibold text-gray-900">Mistakes on Week of {formatWeekRange(selectedWeek.start, selectedWeek.end)}</h3>
+                                <span className="text-xs text-gray-500">Loss amounts only include losing trades</span>
+                              </div>
+                            </div>
+                            <div className="p-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                {/* Mistake Pie Chart */}
+                                <div>
+                                  <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">By Frequency</h4>
+                                  <SimplePieChart data={weekStats.mistakeData.map(m => ({ label: m.name, value: m.totalOccurrences }))} />
+                                </div>
+                                {/* Mistake Loss Bar Chart */}
+                                <div>
+                                  <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">By Loss Amount</h4>
+                                  {(() => {
+                                    const lossData = weekStats.mistakeData
+                                      .filter(m => m.totalLossAmount < 0)
+                                      .sort((a, b) => a.totalLossAmount - b.totalLossAmount)
+                                      .map(m => ({ label: m.name, value: Math.abs(m.totalLossAmount) }));
+                                    if (lossData.length === 0) {
+                                      return <div className="h-24 flex items-center justify-center text-gray-400 text-sm">No losses from mistakes</div>;
+                                    }
+                                    const maxVal = Math.max(...lossData.map(d => d.value), 1);
+                                    return (
+                                      <div className="space-y-2">
+                                        {lossData.map((d, i) => (
+                                          <div key={i} className="flex items-center gap-2">
+                                            <span className="text-xs text-gray-600 w-20 truncate" title={d.label}>{d.label}</span>
+                                            <div className="flex-1 h-4 bg-gray-100 rounded overflow-hidden">
+                                              <div className="h-full rounded bg-red-500" style={{ width: `${(d.value / maxVal) * 100}%` }} />
+                                            </div>
+                                            <span className="text-xs font-medium w-16 text-right text-red-600">-{formatCurrencyShort(d.value)}</span>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </div>
+                              {/* Mistake Details Table */}
+                              <div className="mt-4 pt-4 border-t border-gray-100">
+                                <table className="w-full text-sm">
+                                  <thead>
+                                    <tr className="text-left text-xs text-gray-500 uppercase">
+                                      <th className="pb-2">Mistake</th>
+                                      <th className="pb-2 text-center">Occurrences</th>
+                                      <th className="pb-2 text-center">Losing / Profitable</th>
+                                      <th className="pb-2 text-right">Total Loss</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-gray-100">
+                                    {weekStats.mistakeData.map(m => (
+                                      <tr key={m.id}>
+                                        <td className="py-2 font-medium text-gray-900">{m.name}</td>
+                                        <td className="py-2 text-center text-gray-600">{m.totalOccurrences}x</td>
+                                        <td className="py-2 text-center">
+                                          <span className="text-red-600">{m.losingTrades}</span>
+                                          {' / '}
+                                          <span className="text-emerald-600">{m.profitableTrades}</span>
+                                        </td>
+                                        <td className="py-2 text-right font-semibold text-red-600">
+                                          {m.totalLossAmount < 0 ? formatCurrency(m.totalLossAmount) : '-'}
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Trades Table */}
+                        {weekStats.trades && weekStats.trades.length > 0 && (
+                          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                            <div className="px-4 py-3 border-b border-gray-200">
+                              <h3 className="text-sm font-semibold text-gray-900">
+                                Trades ({weekStats.trades.length})
+                              </h3>
+                            </div>
+                            <div className="overflow-x-auto">
+                              <table className="w-full">
+                                <thead className="bg-gray-50 border-b border-gray-200">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase w-10">#</th>
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Ticker</th>
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Size</th>
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">P&L</th>
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rating</th>
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Setup</th>
+                                    <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Mistakes</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                  {[...weekStats.trades]
+                                    .sort((a, b) => {
+                                      const dateA = a.exitDate || a.entryDate;
+                                      const dateB = b.exitDate || b.entryDate;
+                                      return dateA.localeCompare(dateB) || (a.createdAt || '').localeCompare(b.createdAt || '');
+                                    })
+                                    .map((trade, index) => {
+                                      const setupName = trade.setupId 
+                                        ? (menteeData?.setups?.find(s => s.id === trade.setupId)?.name || '-')
+                                        : '-';
+                                      const mistakeNames = trade.mistakeIds && trade.mistakeIds.length > 0
+                                        ? trade.mistakeIds.map(id => menteeData?.mistakes?.find(m => m.id === id)?.name || '').filter(Boolean).join(', ')
+                                        : '-';
+                                      
+                                      return (
+                                        <tr key={trade.id} className="hover:bg-gray-50">
+                                          <td className="px-3 py-2 text-sm font-medium text-gray-400">{index + 1}</td>
+                                          <td className="px-3 py-2 text-sm text-gray-600">{trade.exitDate || trade.entryDate}</td>
+                                          <td className="px-3 py-2 text-sm font-medium text-gray-900">{trade.ticker}</td>
+                                          <td className="px-3 py-2 text-sm">
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                              trade.positionType === 'long' 
+                                                ? 'bg-emerald-100 text-emerald-700' 
+                                                : 'bg-red-100 text-red-700'
+                                            }`}>
+                                              {trade.positionType?.toUpperCase() || '-'}
+                                            </span>
+                                          </td>
+                                          <td className="px-3 py-2 text-sm text-gray-600">{trade.positionSize || '-'}</td>
+                                          <td className="px-3 py-2 text-sm">
+                                            {trade.derived?.isOpen ? (
+                                              <span className="text-gray-400">Open</span>
+                                            ) : (
+                                              <span className={`font-medium ${(trade.derived?.pnlFinal || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                                {formatCurrency(trade.derived?.pnlFinal || 0)}
+                                              </span>
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            {trade.rating ? (
+                                              <div className="flex items-center gap-0.5">
+                                                {[1, 2, 3, 4, 5].map(star => (
+                                                  <span key={star} className={`text-xs ${star <= trade.rating ? 'text-amber-400' : 'text-gray-300'}`}>★</span>
+                                                ))}
+                                              </div>
+                                            ) : (
+                                              <span className="text-gray-300 text-xs">☆☆☆☆☆</span>
+                                            )}
+                                          </td>
+                                          <td className="px-3 py-2 text-sm text-gray-600 max-w-[100px] truncate" title={setupName}>
+                                            {setupName}
+                                          </td>
+                                          <td className="px-3 py-2 text-sm text-gray-600 max-w-[120px] truncate" title={mistakeNames}>
+                                            {mistakeNames}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    )}
+                    ) : weekStats && weekStats.totalTrades === 0 ? (
+                      <div className="bg-gray-50 rounded-lg p-6 text-center">
+                        <p className="text-gray-500">No trades this week</p>
+                      </div>
+                    ) : null}
 
                     {/* Summary */}
                     <div>
@@ -10467,6 +11073,153 @@
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
+
+                    {/* Assignment/Challenge Creation */}
+                    <div className="border-t border-gray-200 pt-4">
+                      <button
+                        type="button"
+                        onClick={() => setShowAssignmentForm(!showAssignmentForm)}
+                        className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        {showAssignmentForm ? Icons.minus : Icons.plus}
+                        <span>{showAssignmentForm ? 'Cancel Assignment' : 'Add Homework or Challenge'}</span>
+                      </button>
+
+                      {showAssignmentForm && (
+                        <div className="mt-4 p-4 bg-blue-50 rounded-lg space-y-4">
+                          <h4 className="font-medium text-gray-900">📝 New Assignment</h4>
+                          
+                          {/* Assignment Type */}
+                          <div className="flex gap-4">
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="assignmentType"
+                                value="homework"
+                                checked={assignmentData.type === 'homework'}
+                                onChange={(e) => setAssignmentData({ ...assignmentData, type: e.target.value, hasChallenge: false })}
+                                className="text-blue-600"
+                              />
+                              <span className="text-sm">📚 Homework</span>
+                            </label>
+                            <label className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name="assignmentType"
+                                value="challenge"
+                                checked={assignmentData.type === 'challenge'}
+                                onChange={(e) => setAssignmentData({ ...assignmentData, type: e.target.value, hasChallenge: true })}
+                                className="text-blue-600"
+                              />
+                              <span className="text-sm">🎯 Challenge</span>
+                            </label>
+                          </div>
+
+                          {/* Title */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                            <input
+                              type="text"
+                              value={assignmentData.title}
+                              onChange={(e) => setAssignmentData({ ...assignmentData, title: e.target.value })}
+                              placeholder={assignmentData.type === 'homework' ? 'e.g., Read Trading in the Zone Ch. 5' : 'e.g., Hit 60% Win Rate'}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+
+                          {/* Description */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Description (optional)</label>
+                            <textarea
+                              value={assignmentData.description}
+                              onChange={(e) => setAssignmentData({ ...assignmentData, description: e.target.value })}
+                              placeholder="Details or instructions..."
+                              rows={2}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+
+                          {/* Due Date for Homework */}
+                          {assignmentData.type === 'homework' && (
+                            <div>
+                              <label className="block text-sm font-medium text-gray-700 mb-1">Due Date (optional)</label>
+                              <input
+                                type="date"
+                                value={assignmentData.dueDate}
+                                onChange={(e) => setAssignmentData({ ...assignmentData, dueDate: e.target.value })}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              />
+                            </div>
+                          )}
+
+                          {/* Challenge Settings */}
+                          {assignmentData.type === 'challenge' && (
+                            <>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Challenge Type</label>
+                                <select
+                                  value={assignmentData.challengeType}
+                                  onChange={(e) => setAssignmentData({ ...assignmentData, challengeType: e.target.value })}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                >
+                                  {Object.entries(HOMEWORK_CHALLENGE_TYPES).map(([id, type]) => (
+                                    <option key={id} value={id}>{type.label}</option>
+                                  ))}
+                                </select>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Target {HOMEWORK_CHALLENGE_TYPES[assignmentData.challengeType]?.unit || ''}
+                                  </label>
+                                  <input
+                                    type="number"
+                                    value={assignmentData.challengeTarget}
+                                    onChange={(e) => setAssignmentData({ ...assignmentData, challengeTarget: e.target.value })}
+                                    placeholder={assignmentData.challengeType === 'profit' ? '500' : assignmentData.challengeType === 'winrate' ? '60' : '10'}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  />
+                                </div>
+                                {assignmentData.challengeType === 'winrate' && (
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Min Trades</label>
+                                    <input
+                                      type="number"
+                                      value={assignmentData.challengeTradesRequired}
+                                      onChange={(e) => setAssignmentData({ ...assignmentData, challengeTradesRequired: parseInt(e.target.value) || 10 })}
+                                      placeholder="10"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                    />
+                                  </div>
+                                )}
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                                  <input
+                                    type="date"
+                                    value={assignmentData.challengeStartDate}
+                                    onChange={(e) => setAssignmentData({ ...assignmentData, challengeStartDate: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-sm font-medium text-gray-700 mb-1">End Date</label>
+                                  <input
+                                    type="date"
+                                    value={assignmentData.challengeEndDate}
+                                    onChange={(e) => setAssignmentData({ ...assignmentData, challengeEndDate: e.target.value })}
+                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                  />
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   </div>
                   <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 rounded-b-xl flex justify-end gap-3">
                     <button
@@ -10476,10 +11229,46 @@
                       Cancel
                     </button>
                     <button
-                      onClick={handleSaveCheckin}
+                      onClick={async () => {
+                        // Save check-in
+                        const checkinData = {
+                          weekStart: selectedWeek.start,
+                          weekEnd: selectedWeek.end,
+                          stats: weekStats,
+                          summary: formData.summary.trim(),
+                          whatWentWell: formData.whatWentWell.trim(),
+                          areasToImprove: formData.areasToImprove.trim(),
+                          focusForNextWeek: formData.focusForNextWeek.trim(),
+                        };
+                        const checkinSuccess = await onCreateCheckin(checkinData);
+                        
+                        // Also create assignment if form is filled
+                        if (showAssignmentForm && assignmentData.title.trim() && onCreateAssignment) {
+                          const assignmentPayload = {
+                            title: assignmentData.title.trim(),
+                            description: assignmentData.description.trim(),
+                            type: assignmentData.type,
+                            dueDate: assignmentData.dueDate || null,
+                            hasChallenge: assignmentData.type === 'challenge',
+                            challenge: assignmentData.type === 'challenge' ? {
+                              type: assignmentData.challengeType,
+                              target: parseFloat(assignmentData.challengeTarget) || 0,
+                              tradesRequired: assignmentData.challengeTradesRequired,
+                              startDate: assignmentData.challengeStartDate,
+                              endDate: assignmentData.challengeEndDate,
+                            } : null,
+                          };
+                          await onCreateAssignment(assignmentPayload);
+                        }
+                        
+                        if (checkinSuccess) {
+                          setModalOpen(false);
+                          resetForm();
+                        }
+                      }}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
                     >
-                      {editingCheckin ? 'Update Check-in' : 'Save Check-in'}
+                      {editingCheckin ? 'Update Check-in' : (showAssignmentForm && assignmentData.title ? 'Save Check-in & Assignment' : 'Save Check-in')}
                     </button>
                   </div>
                 </div>
@@ -11212,190 +12001,9 @@
         setTradeFlags([]);
       };
 
-      // Render the active journal tab content
-      const renderJournalContent = () => {
-        if (loadingMenteeData) {
-          return (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-                <p className="text-gray-500">Loading journal...</p>
-              </div>
-            </div>
-          );
-        }
-
-        if (!menteeData) return null;
-
-        // Read-only setState that does nothing
-        const readOnlySetState = () => {};
-
-        switch (activeJournalTab) {
-          case 'dashboard':
-            return (
-              <DashboardPage 
-                state={menteeData} 
-                setState={readOnlySetState}
-                setActivePage={() => {}}
-                setSelectedDate={setSelectedDate}
-                isMobile={isMobile}
-                isReadOnly={true}
-              />
-            );
-          case 'tradelog':
-            return (
-              <TradeLogPage 
-                state={menteeData} 
-                setState={readOnlySetState}
-                isMobile={isMobile}
-                isReadOnly={true}
-                isMentorView={true}
-                tradeFeedback={tradeFeedback}
-                tradeFlags={tradeFlags}
-                onAddFeedback={addFeedback}
-                onAddFlag={addFlag}
-                onRemoveFlag={removeFlag}
-                onToggleFlagStatus={toggleFlagStatus}
-              />
-            );
-          case 'calendar':
-            return (
-              <CalendarPage 
-                state={menteeData} 
-                setState={readOnlySetState}
-                selectedDate={selectedDate}
-                setSelectedDate={setSelectedDate}
-                isMobile={isMobile}
-                isReadOnly={true}
-              />
-            );
-          case 'goals':
-            return (
-              <GoalsPage 
-                state={menteeData} 
-                setState={readOnlySetState}
-                isMobile={isMobile}
-                isReadOnly={true}
-              />
-            );
-          case 'setups':
-            return (
-              <SetupsPage 
-                state={menteeData} 
-                setState={readOnlySetState}
-                isMobile={isMobile}
-                isReadOnly={true}
-              />
-            );
-          case 'mistakes':
-            return (
-              <MistakesPage 
-                state={menteeData} 
-                setState={readOnlySetState}
-                isMobile={isMobile}
-                isReadOnly={true}
-              />
-            );
-          case 'assignments':
-            return (
-              <MentorAssignmentsTab
-                assignments={assignments}
-                menteeData={menteeData}
-                selectedMentee={selectedMentee}
-                onCreateAssignment={createAssignment}
-                onUpdateAssignment={updateAssignment}
-                onDeleteAssignment={deleteAssignment}
-                calculateChallengeProgress={calculateChallengeProgress}
-                isMobile={isMobile}
-              />
-            );
-          case 'checkins':
-            return (
-              <MentorCheckinsTab
-                checkins={weeklyCheckins}
-                menteeData={menteeData}
-                selectedMentee={selectedMentee}
-                onCreateCheckin={createCheckin}
-                onDeleteCheckin={deleteCheckin}
-                isMobile={isMobile}
-              />
-            );
-          default:
-            return null;
-        }
-      };
-
-      // If viewing a mentee's journal, show full journal view
-      if (selectedMentee) {
-        return (
-          <div className="space-y-4">
-            {/* Header Bar */}
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
-              <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
-                {/* Back Button */}
-                <button
-                  onClick={handleBackToList}
-                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-                    <path d="M19 12H5M12 19l-7-7 7-7" />
-                  </svg>
-                  <span className="hidden sm:inline">Back to Mentees</span>
-                </button>
-
-                {/* Mentee Info */}
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold text-blue-600">
-                    {selectedMentee.displayName?.charAt(0)?.toUpperCase() || '?'}
-                  </div>
-                  <div>
-                    <h2 className="font-semibold text-gray-900">{selectedMentee.displayName}'s Journal</h2>
-                    <p className="text-xs text-gray-500">{selectedMentee.email}</p>
-                  </div>
-                </div>
-
-                {/* Read-Only Badge */}
-                <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-full text-sm font-medium border border-amber-200">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-                    <path d="M7 11V7a5 5 0 0110 0v4" />
-                  </svg>
-                  <span>Read-Only</span>
-                </div>
-              </div>
-
-              {/* Sub-Navigation Tabs */}
-              <div className="border-t border-gray-200 px-4">
-                <div className="flex gap-1 overflow-x-auto hide-scrollbar">
-                  {journalTabs.map(tab => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveJournalTab(tab.id)}
-                      className={`px-4 py-3 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${
-                        activeJournalTab === tab.id
-                          ? 'text-blue-600 border-blue-600'
-                          : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Journal Content */}
-            <div>
-              {renderJournalContent()}
-            </div>
-          </div>
-        );
-      }
-
-      // Calculate dashboard data
+      // Calculate dashboard data (must be before any returns to satisfy hooks rules)
       const currentWeek = getWeekBounds();
       
-      // Calculate aggregate stats and alerts
       const dashboardData = useMemo(() => {
         const menteesNeedingCheckin = [];
         const menteesNeedingAttention = [];
@@ -11416,7 +12024,7 @@
 
           // Check if weekly check-in is needed for current week
           const hasCurrentWeekCheckin = checkins.some(c => c.weekStart === currentWeek.start);
-          if (!hasCurrentWeekCheckin) {
+          if (!hasCurrentWeekCheckin && mentee.status === 'active') {
             menteesNeedingCheckin.push({
               ...mentee,
               weekStats: calculateWeekStats(trades, currentWeek.start, currentWeek.end),
@@ -11529,7 +12137,7 @@
           totalPnLThisWeek,
           avgWinRate,
         };
-      }, [mentees, allMenteeData, currentWeek]);
+      }, [mentees, allMenteeData, currentWeek.start, currentWeek.end]);
 
       // Helper to get mentee status
       const getMenteeStatus = (menteeId) => {
@@ -11542,6 +12150,187 @@
         if (weekStats.totalPnL >= -50 && weekStats.winRate >= 45) return { color: 'yellow', label: 'Break-even' };
         return { color: 'red', label: 'Struggling' };
       };
+
+      // Render the active journal tab content
+      const renderJournalContent = () => {
+        if (loadingMenteeData) {
+          return (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                <p className="text-gray-500">Loading journal...</p>
+              </div>
+            </div>
+          );
+        }
+
+        if (!menteeData) return null;
+
+        // Read-only setState that does nothing
+        const readOnlySetState = () => {};
+
+        switch (activeJournalTab) {
+          case 'dashboard':
+            return (
+              <DashboardPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                setActivePage={() => {}}
+                setSelectedDate={setSelectedDate}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'tradelog':
+            return (
+              <TradeLogPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                isMobile={isMobile}
+                isReadOnly={true}
+                isMentorView={true}
+                tradeFeedback={tradeFeedback}
+                tradeFlags={tradeFlags}
+                onAddFeedback={addFeedback}
+                onAddFlag={addFlag}
+                onRemoveFlag={removeFlag}
+                onToggleFlagStatus={toggleFlagStatus}
+              />
+            );
+          case 'calendar':
+            return (
+              <CalendarPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                selectedDate={selectedDate}
+                setSelectedDate={setSelectedDate}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'goals':
+            return (
+              <GoalsPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'setups':
+            return (
+              <SetupsPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'mistakes':
+            return (
+              <MistakesPage 
+                state={menteeData} 
+                setState={readOnlySetState}
+                isMobile={isMobile}
+                isReadOnly={true}
+              />
+            );
+          case 'assignments':
+            return (
+              <MentorAssignmentsTab
+                assignments={assignments}
+                menteeData={menteeData}
+                selectedMentee={selectedMentee}
+                onCreateAssignment={createAssignment}
+                onUpdateAssignment={updateAssignment}
+                onDeleteAssignment={deleteAssignment}
+                calculateChallengeProgress={calculateChallengeProgress}
+                isMobile={isMobile}
+              />
+            );
+          case 'checkins':
+            return (
+              <MentorCheckinsTab
+                checkins={weeklyCheckins}
+                menteeData={menteeData}
+                selectedMentee={selectedMentee}
+                onCreateCheckin={createCheckin}
+                onDeleteCheckin={deleteCheckin}
+                onCreateAssignment={createAssignment}
+                isMobile={isMobile}
+              />
+            );
+          default:
+            return null;
+        }
+      };
+
+      // If viewing a mentee's journal, show full journal view
+      if (selectedMentee) {
+        return (
+          <div className="space-y-4">
+            {/* Header Bar */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm">
+              <div className="px-4 py-3 flex items-center justify-between flex-wrap gap-3">
+                {/* Back Button */}
+                <button
+                  onClick={handleBackToList}
+                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 font-medium"
+                >
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                    <path d="M19 12H5M12 19l-7-7 7-7" />
+                  </svg>
+                  <span className="hidden sm:inline">Back to Mentees</span>
+                </button>
+
+                {/* Mentee Info */}
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold text-blue-600">
+                    {selectedMentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                  </div>
+                  <div>
+                    <h2 className="font-semibold text-gray-900">{selectedMentee.displayName}'s Journal</h2>
+                    <p className="text-xs text-gray-500">{selectedMentee.email}</p>
+                  </div>
+                </div>
+
+                {/* Read-Only Badge */}
+                <div className="flex items-center gap-2 bg-amber-50 text-amber-700 px-3 py-1.5 rounded-full text-sm font-medium border border-amber-200">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0110 0v4" />
+                  </svg>
+                  <span>Read-Only</span>
+                </div>
+              </div>
+
+              {/* Sub-Navigation Tabs */}
+              <div className="border-t border-gray-200 px-4">
+                <div className="flex gap-1 overflow-x-auto hide-scrollbar">
+                  {journalTabs.map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveJournalTab(tab.id)}
+                      className={`px-4 py-3 font-medium text-sm whitespace-nowrap border-b-2 transition-colors ${
+                        activeJournalTab === tab.id
+                          ? 'text-blue-600 border-blue-600'
+                          : 'text-gray-500 border-transparent hover:text-gray-700 hover:border-gray-300'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Journal Content */}
+            <div>
+              {renderJournalContent()}
+            </div>
+          </div>
+        );
+      }
 
       // Mentee List/Dashboard View
       return (
