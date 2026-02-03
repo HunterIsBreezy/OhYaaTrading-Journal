@@ -8872,16 +8872,43 @@
 
       const getNotificationIcon = (type) => {
         switch (type) {
+          // Mentee notifications (from mentor)
           case 'feedback': return '💬';
           case 'flag': return '🚩';
           case 'checkin': return '📋';
           case 'assignment': return '📝';
           case 'question_answered': return '💡';
+          case 'assignment_reviewed': return '✅';
           case 'session': return '📅';
           case 'session_reminder': return '⏰';
-          case 'assignment_reviewed': return '✅';
+          
+          // Mentor notifications (from mentee)
+          case 'question_asked': return '❓';
+          case 'assignment_completed': return '📋';
+          case 'mentee_daily_target': return '🎯';
+          case 'mentee_challenge_complete': return '🏅';
+          case 'mentee_milestone': return '🎉';
+          case 'invite_accepted': return '🤝';
+          
+          // Self notifications (achievements)
+          case 'daily_target_hit': return '🎯';
+          case 'daily_target_exceeded': return '🔥';
+          case 'weekly_goal_progress': return '📈';
+          case 'monthly_goal_progress': return '🏆';
+          case 'yearly_goal_progress': return '⭐';
+          case 'challenge_progress': return '💪';
+          case 'challenge_completed': return '🏅';
+          case 'challenge_failed': return '😔';
+          case 'win_streak': return '🔥';
+          case 'profitable_week': return '💚';
+          case 'profitable_month': return '💰';
+          case 'new_personal_best': return '🏆';
+          case 'trading_milestone': return '🎉';
+          
+          // Email reports
           case 'weekly_recap': return '📊';
           case 'monthly_report': return '📈';
+          
           default: return '🔔';
         }
       };
@@ -8990,7 +9017,7 @@
           <header className="fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 flex items-center justify-between px-4 z-20">
             <span className="font-bold text-lg"><span className="text-slate-900">oh</span><span className="text-blue-600">Yaaa</span></span>
             <div className="flex items-center gap-2">
-              {userProfile?.mentorId && <NotificationBell />}
+              {userProfile && <NotificationBell />}
               {userProfile && (
                 <div className="relative">
                   <button
@@ -9034,7 +9061,7 @@
                 <span>Storage {percentUsed}% full</span>
               </div>
             )}
-            {userProfile?.mentorId && <NotificationBell />}
+            {userProfile && <NotificationBell />}
             {userProfile && (
               <div className="relative">
                 <button
@@ -13960,6 +13987,20 @@
             // Send email notification to mentor
             const emailData = emailTemplates.inviteAccepted(userProfile.pendingMentorEmail, userProfile.displayName);
             await sendEmail(emailData);
+
+            // Create in-app notification for mentor
+            await db.collection('users')
+              .doc(userProfile.pendingMentorId)
+              .collection('notifications')
+              .add({
+                type: 'invite_accepted',
+                title: `${userProfile.displayName} accepted your invitation!`,
+                message: 'You can now view their trades and provide feedback.',
+                link: 'mentees',
+                read: false,
+                menteeId: userProfile.uid,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
           } else {
             // Decline - remove pending mentor
             await db.collection('users').doc(userProfile.uid).update({
@@ -14081,7 +14122,6 @@
           setMyAssignments([]);
           setMyCheckins([]);
           setMySessions([]);
-          setNotifications([]);
           return;
         }
 
@@ -14150,7 +14190,23 @@
             }
           );
 
-        // Subscribe to notifications (with error handling)
+        return () => {
+          unsubFeedback();
+          unsubFlags();
+          unsubQuestions();
+          unsubAssignments();
+          unsubCheckins();
+          unsubSessions();
+        };
+      }, [user, userProfile?.mentorId]);
+
+      // Load notifications for ALL users (mentors and mentees)
+      useEffect(() => {
+        if (!user) {
+          setNotifications([]);
+          return;
+        }
+
         const unsubNotifications = db.collection('users')
           .doc(user.uid)
           .collection('notifications')
@@ -14166,22 +14222,23 @@
             }
           );
 
-        return () => {
-          unsubFeedback();
-          unsubFlags();
-          unsubQuestions();
-          unsubAssignments();
-          unsubCheckins();
-          unsubSessions();
-          unsubNotifications();
-        };
-      }, [user, userProfile?.mentorId]);
+        return () => unsubNotifications();
+      }, [user]);
 
       // Update assignment (for mentee)
       const updateMyAssignment = async (assignmentId, updates) => {
         if (!user) return false;
 
         try {
+          // Get the assignment first to know the mentor
+          const assignmentDoc = await db.collection('users')
+            .doc(user.uid)
+            .collection('assignments')
+            .doc(assignmentId)
+            .get();
+          
+          const assignment = assignmentDoc.data();
+
           await db.collection('users')
             .doc(user.uid)
             .collection('assignments')
@@ -14190,6 +14247,23 @@
               ...updates,
               updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
+
+          // Notify mentor if mentee completed the assignment
+          if (updates.status === 'completed' && assignment?.mentorId) {
+            await db.collection('users')
+              .doc(assignment.mentorId)
+              .collection('notifications')
+              .add({
+                type: 'assignment_completed',
+                title: `${userProfile?.displayName} completed an assignment`,
+                message: assignment.title || 'Assignment completed and ready for review',
+                link: 'mentees',
+                read: false,
+                menteeId: user.uid,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+          }
+
           return true;
         } catch (err) {
           console.error('Failed to update assignment:', err);
@@ -14234,6 +14308,22 @@
               answeredAt: null,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
+
+          // Notify the mentor
+          const questionTypeLabels = { entry: 'Entry', exit: 'Exit', improvement: 'Improvement', general: 'General' };
+          await db.collection('users')
+            .doc(userProfile.mentorId)
+            .collection('notifications')
+            .add({
+              type: 'question_asked',
+              title: `${userProfile.displayName} asked a question`,
+              message: `${questionTypeLabels[questionType] || 'Question'}: ${question.trim().substring(0, 80)}...`,
+              link: 'mentees',
+              read: false,
+              menteeId: user.uid,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+
           return true;
         } catch (err) {
           console.error('Failed to ask question:', err);
@@ -14301,26 +14391,63 @@
 
         // Navigate based on notification type
         switch (notification.type) {
+          // Trade-related
           case 'feedback':
           case 'flag':
           case 'question_answered':
+          case 'win_streak':
+          case 'trading_milestone':
             setActivePage('tradelog');
             break;
+          
+          // Check-ins
           case 'checkin':
           case 'weekly_recap':
             setActivePage('checkins');
             break;
+          
+          // Assignments
           case 'assignment':
           case 'assignment_reviewed':
             setActivePage('assignments');
             break;
+          
+          // Sessions
           case 'session':
           case 'session_reminder':
             setActivePage('sessions');
             break;
+          
+          // Goals & Challenges
+          case 'yearly_goal_progress':
+          case 'challenge_progress':
+          case 'challenge_completed':
+          case 'challenge_failed':
+            setActivePage('goals');
+            break;
+          
+          // Dashboard (achievements & reports)
+          case 'daily_target_hit':
+          case 'daily_target_exceeded':
+          case 'weekly_goal_progress':
+          case 'monthly_goal_progress':
+          case 'profitable_week':
+          case 'profitable_month':
+          case 'new_personal_best':
           case 'monthly_report':
             setActivePage('dashboard');
             break;
+          
+          // Mentor notifications
+          case 'question_asked':
+          case 'assignment_completed':
+          case 'mentee_daily_target':
+          case 'mentee_challenge_complete':
+          case 'mentee_milestone':
+          case 'invite_accepted':
+            setActivePage('mentees');
+            break;
+          
           default:
             break;
         }
@@ -14362,51 +14489,256 @@
         return () => unsubscribe();
       }, [user]);
 
-      // Check if daily target was hit and send email
-      const checkDailyTargetAndNotify = async (newState, oldState, userProfile) => {
-        console.log('Checking daily target...', { 
-          hasEmail: !!userProfile?.email, 
-          hasGoal: !!newState.yearlyGoal?.target 
+      // Helper to create self-notification (for trader's own achievements)
+      const createSelfNotification = async (type, title, message, link = 'dashboard') => {
+        if (!user) return;
+        try {
+          await db.collection('users').doc(user.uid).collection('notifications').add({
+            type, title, message, link,
+            read: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (err) {
+          console.error('Failed to create notification:', err);
+        }
+      };
+
+      // Helper to notify mentor about mentee's achievement
+      const notifyMentorOfProgress = async (type, title, message) => {
+        if (!userProfile?.mentorId) return;
+        try {
+          await db.collection('users').doc(userProfile.mentorId).collection('notifications').add({
+            type, title, message,
+            link: 'mentees',
+            menteeId: user.uid,
+            read: false,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+        } catch (err) {
+          console.error('Failed to notify mentor:', err);
+        }
+      };
+
+      // Comprehensive progress checking
+      const checkProgressAndNotify = async (newState, oldState, userProfile) => {
+        if (!userProfile?.uid || !newState) return;
+
+        const today = todayISO();
+        const now = new Date();
+        
+        // Calculate daily P&L
+        const calcDailyPnL = (trades, date) => {
+          return trades.filter(t => t.entryDate === date).reduce((sum, t) => {
+            const derived = calcTradeDerived(t);
+            return sum + (derived.pnlFinal || 0);
+          }, 0);
+        };
+
+        const todayPnL = calcDailyPnL(newState.trades || [], today);
+        const oldTodayPnL = calcDailyPnL(oldState?.trades || [], today);
+
+        // Daily target check
+        if (newState.yearlyGoal?.target) {
+          const dailyTarget = newState.yearlyGoal.target / 252;
+          const wasHit = oldTodayPnL >= dailyTarget;
+          const isHit = todayPnL >= dailyTarget;
+          const isExceeded = todayPnL >= dailyTarget * 1.5;
+          const wasExceeded = oldTodayPnL >= dailyTarget * 1.5;
+
+          if (!wasHit && isHit) {
+            // Daily target hit - send email
+            const emailData = emailTemplates.dailyTargetHit(userProfile.email, userProfile.displayName, todayPnL, dailyTarget);
+            await sendEmail(emailData);
+            
+            // Create notification
+            await createSelfNotification('daily_target_hit', '🎯 Daily Target Hit!', 
+              `You made $${todayPnL.toFixed(0)} today (target: $${dailyTarget.toFixed(0)})`);
+            
+            // Notify mentor if mentee
+            if (userProfile.mentorId) {
+              await notifyMentorOfProgress('mentee_daily_target', 
+                `🎯 ${userProfile.displayName} hit daily target`,
+                `Made $${todayPnL.toFixed(0)} today`);
+            }
+          }
+
+          if (!wasExceeded && isExceeded) {
+            await createSelfNotification('daily_target_exceeded', '🔥 Crushed It!', 
+              `You exceeded your daily target by ${((todayPnL / dailyTarget - 1) * 100).toFixed(0)}%!`);
+          }
+        }
+
+        // Win streak check
+        const sortedTrades = [...(newState.trades || [])].sort((a, b) => 
+          new Date(b.entryDate + 'T' + (b.entryTime || '00:00')) - new Date(a.entryDate + 'T' + (a.entryTime || '00:00'))
+        );
+        
+        let currentStreak = 0;
+        for (const trade of sortedTrades) {
+          const derived = calcTradeDerived(trade);
+          if ((derived.pnlFinal || 0) > 0) {
+            currentStreak++;
+          } else {
+            break;
+          }
+        }
+
+        // Check old streak
+        const oldSortedTrades = [...(oldState?.trades || [])].sort((a, b) => 
+          new Date(b.entryDate + 'T' + (b.entryTime || '00:00')) - new Date(a.entryDate + 'T' + (a.entryTime || '00:00'))
+        );
+        let oldStreak = 0;
+        for (const trade of oldSortedTrades) {
+          const derived = calcTradeDerived(trade);
+          if ((derived.pnlFinal || 0) > 0) {
+            oldStreak++;
+          } else {
+            break;
+          }
+        }
+
+        // Notify on streak milestones
+        const streakMilestones = [3, 5, 10, 15, 20];
+        for (const milestone of streakMilestones) {
+          if (currentStreak >= milestone && oldStreak < milestone) {
+            await createSelfNotification('win_streak', `🔥 ${milestone} Win Streak!`, 
+              `You're on fire! ${milestone} consecutive winning trades.`, 'tradelog');
+            break;
+          }
+        }
+
+        // Trading milestone check (total trades)
+        const totalTrades = (newState.trades || []).length;
+        const oldTotalTrades = (oldState?.trades || []).length;
+        const tradeMilestones = [10, 25, 50, 100, 250, 500, 1000];
+        
+        for (const milestone of tradeMilestones) {
+          if (totalTrades >= milestone && oldTotalTrades < milestone) {
+            await createSelfNotification('trading_milestone', `🎉 ${milestone} Trades Logged!`, 
+              `Congratulations! You've logged ${milestone} trades.`, 'tradelog');
+            
+            if (userProfile.mentorId) {
+              await notifyMentorOfProgress('mentee_milestone', 
+                `🎉 ${userProfile.displayName} reached ${milestone} trades`,
+                `Milestone: ${milestone} trades logged`);
+            }
+            break;
+          }
+        }
+
+        // Challenge progress check
+        const challenges = newState.challenges || [];
+        const oldChallenges = oldState?.challenges || [];
+        
+        for (const challenge of challenges) {
+          if (challenge.status === 'completed') continue;
+          
+          const oldChallenge = oldChallenges.find(c => c.id === challenge.id);
+          if (!oldChallenge) continue;
+
+          // Calculate progress for both
+          const calcProgress = (ch) => {
+            const startDate = ch.startDate;
+            const endDate = ch.endDate;
+            const relevantTrades = (newState.trades || []).filter(t => 
+              t.entryDate >= startDate && (!endDate || t.entryDate <= endDate)
+            );
+            
+            let current = 0;
+            let target = 0;
+            
+            switch (ch.type) {
+              case 'profit':
+                current = relevantTrades.reduce((sum, t) => sum + (calcTradeDerived(t).pnlFinal || 0), 0);
+                target = ch.targetValue || 0;
+                break;
+              case 'trades':
+                current = relevantTrades.length;
+                target = ch.tradeLimit || 0;
+                break;
+              case 'winrate':
+                const wins = relevantTrades.filter(t => (calcTradeDerived(t).pnlFinal || 0) > 0).length;
+                current = relevantTrades.length > 0 ? (wins / relevantTrades.length) * 100 : 0;
+                target = ch.targetPercent || 0;
+                break;
+            }
+            
+            return target > 0 ? (current / target) * 100 : 0;
+          };
+
+          const progress = calcProgress(challenge);
+          const oldProgress = calcProgress(oldChallenge);
+
+          // Progress milestones
+          const progressMilestones = [50, 75, 100];
+          for (const milestone of progressMilestones) {
+            if (progress >= milestone && oldProgress < milestone) {
+              if (milestone === 100) {
+                await createSelfNotification('challenge_completed', '🏅 Challenge Completed!', 
+                  `You completed: ${challenge.name}`, 'goals');
+                
+                if (userProfile.mentorId) {
+                  await notifyMentorOfProgress('mentee_challenge_complete', 
+                    `🏅 ${userProfile.displayName} completed a challenge`,
+                    challenge.name);
+                }
+              } else {
+                await createSelfNotification('challenge_progress', `💪 ${milestone}% Challenge Progress`, 
+                  `${challenge.name}: ${milestone}% complete`, 'goals');
+              }
+              break;
+            }
+          }
+        }
+
+        // Yearly goal progress check
+        if (newState.yearlyGoal?.target) {
+          const yearStart = `${now.getFullYear()}-01-01`;
+          const yearTrades = (newState.trades || []).filter(t => t.entryDate >= yearStart);
+          const yearPnL = yearTrades.reduce((sum, t) => sum + (calcTradeDerived(t).pnlFinal || 0), 0);
+          const yearProgress = (yearPnL / newState.yearlyGoal.target) * 100;
+
+          const oldYearTrades = (oldState?.trades || []).filter(t => t.entryDate >= yearStart);
+          const oldYearPnL = oldYearTrades.reduce((sum, t) => sum + (calcTradeDerived(t).pnlFinal || 0), 0);
+          const oldYearProgress = oldState?.yearlyGoal?.target ? (oldYearPnL / oldState.yearlyGoal.target) * 100 : 0;
+
+          const goalMilestones = [25, 50, 75, 100];
+          for (const milestone of goalMilestones) {
+            if (yearProgress >= milestone && oldYearProgress < milestone) {
+              if (milestone === 100) {
+                await createSelfNotification('yearly_goal_progress', '⭐ Yearly Goal Achieved!', 
+                  `You reached your ${now.getFullYear()} goal of $${newState.yearlyGoal.target.toLocaleString()}!`, 'goals');
+              } else {
+                await createSelfNotification('yearly_goal_progress', `📈 ${milestone}% of Yearly Goal`, 
+                  `$${yearPnL.toFixed(0)} of $${newState.yearlyGoal.target.toLocaleString()} target`, 'goals');
+              }
+              break;
+            }
+          }
+        }
+
+        // Personal best check
+        const allDailyPnLs = {};
+        (newState.trades || []).forEach(t => {
+          const date = t.entryDate;
+          const pnl = calcTradeDerived(t).pnlFinal || 0;
+          allDailyPnLs[date] = (allDailyPnLs[date] || 0) + pnl;
         });
         
-        if (!userProfile?.email || !newState.yearlyGoal?.target) return;
+        const bestDay = Math.max(...Object.values(allDailyPnLs), 0);
+        const todayIsBest = allDailyPnLs[today] === bestDay && bestDay > 0;
 
-        const today = new Date().toISOString().split('T')[0];
-        const dailyTarget = newState.yearlyGoal.target / 252; // 252 trading days
+        const oldDailyPnLs = {};
+        (oldState?.trades || []).forEach(t => {
+          const date = t.entryDate;
+          const pnl = calcTradeDerived(t).pnlFinal || 0;
+          oldDailyPnLs[date] = (oldDailyPnLs[date] || 0) + pnl;
+        });
+        const oldBestDay = Math.max(...Object.values(oldDailyPnLs), 0);
 
-        // Calculate today's P&L from new state
-        const todayTrades = newState.trades.filter(t => t.entryDate === today);
-        const todayPnL = todayTrades.reduce((sum, t) => {
-          const derived = calcTradeDerived(t);
-          return sum + (derived.pnlFinal || 0);
-        }, 0);
-
-        // Calculate today's P&L from old state
-        const oldTodayTrades = (oldState?.trades || []).filter(t => t.entryDate === today);
-        const oldTodayPnL = oldTodayTrades.reduce((sum, t) => {
-          const derived = calcTradeDerived(t);
-          return sum + (derived.pnlFinal || 0);
-        }, 0);
-
-        console.log('Daily target check:', { today, dailyTarget, todayPnL, oldTodayPnL });
-
-        // Check if we just crossed the daily target (wasn't hit before, is hit now)
-        const wasHit = oldTodayPnL >= dailyTarget;
-        const isHit = todayPnL >= dailyTarget;
-
-        console.log('Target status:', { wasHit, isHit });
-
-        if (!wasHit && isHit) {
-          // Daily target just hit! Send email
-          console.log('Sending daily target hit email!');
-          const emailData = emailTemplates.dailyTargetHit(
-            userProfile.email,
-            userProfile.displayName,
-            todayPnL,
-            dailyTarget
-          );
-          await sendEmail(emailData);
-          console.log('Daily target hit email sent!');
+        if (todayIsBest && bestDay > oldBestDay && bestDay > 100) {
+          await createSelfNotification('new_personal_best', '🏆 New Personal Best Day!', 
+            `$${bestDay.toFixed(0)} - Your best trading day ever!`, 'dashboard');
         }
       };
 
@@ -14463,7 +14795,7 @@
           // Check if daily target was hit (only if trades changed)
           if (newState.trades?.length !== oldState?.trades?.length || 
               JSON.stringify(newState.trades) !== JSON.stringify(oldState?.trades)) {
-            checkDailyTargetAndNotify(newState, oldState, userProfile);
+            checkProgressAndNotify(newState, oldState, userProfile);
           }
           // Save successful - no alert needed
         } catch (error) {
