@@ -594,6 +594,12 @@
           <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
         </svg>
       ),
+      sessions: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+          <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14v-4z" />
+          <rect x="3" y="6" width="12" height="12" rx="2" />
+        </svg>
+      ),
     };
 
     // =============================================================================
@@ -3400,9 +3406,9 @@
       const [questionContent, setQuestionContent] = useState('');
       const [submittingQuestion, setSubmittingQuestion] = useState(false);
       
-      // Answer form state (for mentor)
-      const [answerContent, setAnswerContent] = useState('');
-      const [submittingAnswer, setSubmittingAnswer] = useState(false);
+      // Answer form state (for mentor) - keyed by question ID
+      const [answerContents, setAnswerContents] = useState({});
+      const [submittingAnswerId, setSubmittingAnswerId] = useState(null);
 
       // Get feedback for the current context (mentor view vs mentee view)
       const activeFeedback = isMentorView ? tradeFeedback : myTradeFeedback;
@@ -4703,28 +4709,29 @@
                                 {isMentorView && q.status === 'asked' && onAnswerQuestion && (
                                   <div className="ml-6 mt-3 pl-3 border-l-2 border-gray-200">
                                     <textarea
-                                      value={answerContent}
-                                      onChange={(e) => setAnswerContent(e.target.value)}
+                                      value={answerContents[q.id] || ''}
+                                      onChange={(e) => setAnswerContents(prev => ({ ...prev, [q.id]: e.target.value }))}
                                       placeholder="Write your answer..."
                                       rows={2}
                                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                     <button
                                       onClick={async () => {
-                                        if (!answerContent.trim()) return;
-                                        setSubmittingAnswer(true);
+                                        const answer = answerContents[q.id]?.trim();
+                                        if (!answer) return;
+                                        setSubmittingAnswerId(q.id);
                                         try {
-                                          await onAnswerQuestion(q.id, answerContent.trim());
-                                          setAnswerContent('');
+                                          await onAnswerQuestion(q.id, answer);
+                                          setAnswerContents(prev => ({ ...prev, [q.id]: '' }));
                                         } catch (err) {
                                           console.error('Error answering question:', err);
                                         }
-                                        setSubmittingAnswer(false);
+                                        setSubmittingAnswerId(null);
                                       }}
-                                      disabled={!answerContent.trim() || submittingAnswer}
+                                      disabled={!answerContents[q.id]?.trim() || submittingAnswerId === q.id}
                                       className="mt-2 px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
                                     >
-                                      {submittingAnswer ? 'Sending...' : 'Send Answer'}
+                                      {submittingAnswerId === q.id ? 'Sending...' : 'Send Answer'}
                                     </button>
                                   </div>
                                 )}
@@ -9673,6 +9680,161 @@
     }
 
     // =============================================================================
+    // SESSIONS PAGE (Mentee's view of their sessions)
+    // =============================================================================
+    function SessionsPage({ 
+      sessions, 
+      userProfile,
+      isMobile,
+    }) {
+      if (!userProfile?.mentorId) {
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+              📅
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Sessions</h3>
+            <p className="text-gray-500">Connect with a mentor to schedule review sessions.</p>
+          </div>
+        );
+      }
+
+      const formatDateTime = (timestamp) => {
+        if (!timestamp?.toDate) return 'Unknown';
+        const date = timestamp.toDate();
+        return date.toLocaleDateString('en-US', { 
+          weekday: 'long',
+          month: 'long', 
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+      };
+
+      const getStatusBadge = (status) => {
+        switch (status) {
+          case 'requested':
+            return <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-700 rounded">Requested</span>;
+          case 'confirmed':
+            return <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">Confirmed</span>;
+          case 'completed':
+            return <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">Completed</span>;
+          case 'cancelled':
+            return <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500 rounded">Cancelled</span>;
+          default:
+            return null;
+        }
+      };
+
+      // Split sessions
+      const now = new Date();
+      const upcomingSessions = sessions
+        .filter(s => s.dateTime?.toDate && s.dateTime.toDate() >= now && s.status !== 'cancelled' && s.status !== 'completed')
+        .sort((a, b) => a.dateTime.toDate() - b.dateTime.toDate());
+      
+      const pastSessions = sessions
+        .filter(s => s.dateTime?.toDate && (s.dateTime.toDate() < now || s.status === 'completed' || s.status === 'cancelled'))
+        .sort((a, b) => b.dateTime.toDate() - a.dateTime.toDate());
+
+      return (
+        <div className="space-y-6">
+          {/* Header */}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Sessions</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Review sessions with your mentor: {userProfile.mentorName}
+            </p>
+          </div>
+
+          {/* Upcoming Sessions */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+              <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                <span>📆</span>
+                <span>Upcoming Sessions</span>
+                {upcomingSessions.length > 0 && (
+                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    {upcomingSessions.length}
+                  </span>
+                )}
+              </h2>
+            </div>
+            
+            {upcomingSessions.length === 0 ? (
+              <div className="px-6 py-8 text-center text-gray-500">
+                <p>No upcoming sessions scheduled</p>
+                <p className="text-sm mt-1">Your mentor will schedule sessions when needed</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {upcomingSessions.map(session => (
+                  <div key={session.id} className="px-6 py-4">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-semibold text-gray-900">{formatDateTime(session.dateTime)}</span>
+                          {getStatusBadge(session.status)}
+                        </div>
+                        <p className="text-gray-600">{session.topic}</p>
+                        <p className="text-sm text-gray-500 mt-1">Duration: {session.duration} minutes</p>
+                        {session.videoLink && (
+                          <a 
+                            href={session.videoLink} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 mt-2 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700"
+                          >
+                            🔗 Join Video Call
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Past Sessions */}
+          {pastSessions.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <span>📋</span>
+                  <span>Past Sessions</span>
+                </h2>
+              </div>
+              
+              <div className="divide-y divide-gray-100">
+                {pastSessions.map(session => (
+                  <div key={session.id} className="px-6 py-4">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`font-medium ${session.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                            {formatDateTime(session.dateTime)}
+                          </span>
+                          {getStatusBadge(session.status)}
+                        </div>
+                        <p className={session.status === 'cancelled' ? 'text-gray-400' : 'text-gray-600'}>{session.topic}</p>
+                        {session.notes && (
+                          <div className="mt-2 p-3 bg-green-50 rounded-lg border border-green-100">
+                            <p className="text-sm font-medium text-green-800 mb-1">📝 Session Notes:</p>
+                            <p className="text-sm text-green-700">{session.notes}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============================================================================
     // ASSIGNMENTS PAGE (Mentee's view of their assignments)
     // =============================================================================
     function AssignmentsPage({ 
@@ -11503,6 +11665,377 @@
     }
 
     // =============================================================================
+    // MENTOR SESSIONS TAB
+    // =============================================================================
+    function MentorSessionsTab({
+      sessions,
+      selectedMentee,
+      userProfile,
+      onCreateSession,
+      onUpdateStatus,
+      onDeleteSession,
+      isMobile,
+    }) {
+      const [showForm, setShowForm] = useState(false);
+      const [formData, setFormData] = useState({
+        date: '',
+        time: '',
+        duration: 30,
+        topic: '',
+        videoLink: '',
+      });
+      const [saving, setSaving] = useState(false);
+      const [editingSession, setEditingSession] = useState(null);
+      const [notesModalOpen, setNotesModalOpen] = useState(false);
+      const [notesSession, setNotesSession] = useState(null);
+      const [sessionNotes, setSessionNotes] = useState('');
+
+      const resetForm = () => {
+        setFormData({
+          date: '',
+          time: '',
+          duration: 30,
+          topic: '',
+          videoLink: '',
+        });
+        setShowForm(false);
+        setEditingSession(null);
+      };
+
+      const handleSubmit = async () => {
+        if (!formData.date || !formData.time || !formData.topic.trim()) return;
+        
+        setSaving(true);
+        try {
+          const dateTime = new Date(`${formData.date}T${formData.time}`);
+          const success = await onCreateSession({
+            dateTime: firebase.firestore.Timestamp.fromDate(dateTime),
+            duration: formData.duration,
+            topic: formData.topic.trim(),
+            videoLink: formData.videoLink.trim() || null,
+          });
+          
+          if (success) {
+            resetForm();
+          }
+        } catch (err) {
+          console.error('Error creating session:', err);
+        }
+        setSaving(false);
+      };
+
+      const handleComplete = async (session) => {
+        setNotesSession(session);
+        setSessionNotes(session.notes || '');
+        setNotesModalOpen(true);
+      };
+
+      const saveNotesAndComplete = async () => {
+        if (!notesSession) return;
+        await onUpdateStatus(notesSession.id, 'completed', sessionNotes);
+        setNotesModalOpen(false);
+        setNotesSession(null);
+        setSessionNotes('');
+      };
+
+      // Split sessions into upcoming and past
+      const now = new Date();
+      const upcomingSessions = sessions
+        .filter(s => s.dateTime?.toDate && s.dateTime.toDate() >= now && s.status !== 'cancelled' && s.status !== 'completed')
+        .sort((a, b) => a.dateTime.toDate() - b.dateTime.toDate());
+      
+      const pastSessions = sessions
+        .filter(s => s.dateTime?.toDate && (s.dateTime.toDate() < now || s.status === 'completed' || s.status === 'cancelled'))
+        .sort((a, b) => b.dateTime.toDate() - a.dateTime.toDate());
+
+      const formatDateTime = (timestamp) => {
+        if (!timestamp?.toDate) return 'Unknown';
+        const date = timestamp.toDate();
+        return date.toLocaleDateString('en-US', { 
+          weekday: 'short',
+          month: 'short', 
+          day: 'numeric',
+          hour: 'numeric',
+          minute: '2-digit',
+        });
+      };
+
+      const getStatusBadge = (status) => {
+        switch (status) {
+          case 'requested':
+            return <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-700 rounded">Requested</span>;
+          case 'confirmed':
+            return <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded">Confirmed</span>;
+          case 'completed':
+            return <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">Completed</span>;
+          case 'cancelled':
+            return <span className="px-2 py-1 text-xs font-medium bg-gray-100 text-gray-500 rounded">Cancelled</span>;
+          default:
+            return null;
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-semibold text-gray-900">📅 Sessions with {selectedMentee?.displayName}</h2>
+            <button
+              onClick={() => setShowForm(!showForm)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
+            >
+              {showForm ? Icons.minus : Icons.plus}
+              <span>{showForm ? 'Cancel' : 'Schedule Session'}</span>
+            </button>
+          </div>
+
+          {/* Schedule Form */}
+          {showForm && (
+            <div className="bg-blue-50 rounded-xl p-6 border border-blue-200">
+              <h3 className="font-semibold text-gray-900 mb-4">📅 Schedule New Session</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Date */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date *</label>
+                  <input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                    min={todayISO()}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Time */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Time *</label>
+                  <input
+                    type="time"
+                    value={formData.time}
+                    onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Duration */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Duration</label>
+                  <select
+                    value={formData.duration}
+                    onChange={(e) => setFormData({ ...formData, duration: parseInt(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value={15}>15 minutes</option>
+                    <option value={30}>30 minutes</option>
+                    <option value={45}>45 minutes</option>
+                    <option value={60}>1 hour</option>
+                    <option value={90}>1.5 hours</option>
+                  </select>
+                </div>
+
+                {/* Video Link */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Video Link (optional)</label>
+                  <input
+                    type="url"
+                    value={formData.videoLink}
+                    onChange={(e) => setFormData({ ...formData, videoLink: e.target.value })}
+                    placeholder="https://zoom.us/j/..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Topic */}
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Topic / Agenda *</label>
+                <textarea
+                  value={formData.topic}
+                  onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                  placeholder="What will you discuss in this session?"
+                  rows={2}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Submit */}
+              <div className="mt-4 flex justify-end gap-3">
+                <button
+                  onClick={resetForm}
+                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={saving || !formData.date || !formData.time || !formData.topic.trim()}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? 'Scheduling...' : 'Schedule Session'}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Upcoming Sessions */}
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-white">
+              <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                <span>📆</span>
+                <span>Upcoming Sessions</span>
+                {upcomingSessions.length > 0 && (
+                  <span className="bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full text-xs font-medium">
+                    {upcomingSessions.length}
+                  </span>
+                )}
+              </h3>
+            </div>
+            
+            {upcomingSessions.length === 0 ? (
+              <div className="px-6 py-8 text-center text-gray-500">
+                <p>No upcoming sessions scheduled</p>
+              </div>
+            ) : (
+              <div className="divide-y divide-gray-100">
+                {upcomingSessions.map(session => (
+                  <div key={session.id} className="px-6 py-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-medium text-gray-900">{formatDateTime(session.dateTime)}</span>
+                          <span className="text-gray-400">•</span>
+                          <span className="text-sm text-gray-500">{session.duration} min</span>
+                          {getStatusBadge(session.status)}
+                        </div>
+                        <p className="text-gray-600">{session.topic}</p>
+                        {session.videoLink && (
+                          <a 
+                            href={session.videoLink} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 mt-2 text-sm text-blue-600 hover:text-blue-700"
+                          >
+                            🔗 Join Video Call
+                          </a>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleComplete(session)}
+                          className="px-3 py-1.5 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+                        >
+                          Complete
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (confirm('Cancel this session?')) {
+                              onUpdateStatus(session.id, 'cancelled');
+                            }
+                          }}
+                          className="px-3 py-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 text-sm rounded-lg"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Past Sessions */}
+          {pastSessions.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2">
+                  <span>📋</span>
+                  <span>Past Sessions</span>
+                </h3>
+              </div>
+              
+              <div className="divide-y divide-gray-100">
+                {pastSessions.map(session => (
+                  <div key={session.id} className="px-6 py-4 hover:bg-gray-50">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`font-medium ${session.status === 'cancelled' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
+                            {formatDateTime(session.dateTime)}
+                          </span>
+                          <span className="text-gray-400">•</span>
+                          <span className="text-sm text-gray-500">{session.duration} min</span>
+                          {getStatusBadge(session.status)}
+                        </div>
+                        <p className={`${session.status === 'cancelled' ? 'text-gray-400' : 'text-gray-600'}`}>{session.topic}</p>
+                        {session.notes && (
+                          <div className="mt-2 p-2 bg-gray-50 rounded text-sm text-gray-600">
+                            <span className="font-medium">Notes:</span> {session.notes}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={() => {
+                          if (confirm('Delete this session?')) {
+                            onDeleteSession(session.id);
+                          }
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        {Icons.trash}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Notes Modal */}
+          {notesModalOpen && notesSession && (
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-xl shadow-xl max-w-lg w-full">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h3 className="font-semibold text-gray-900">Complete Session</h3>
+                  <p className="text-sm text-gray-500 mt-1">{formatDateTime(notesSession.dateTime)} - {notesSession.topic}</p>
+                </div>
+                <div className="p-6">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Session Notes (optional)</label>
+                  <textarea
+                    value={sessionNotes}
+                    onChange={(e) => setSessionNotes(e.target.value)}
+                    placeholder="Key takeaways, action items, areas to focus on..."
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  />
+                </div>
+                <div className="px-6 py-4 bg-gray-50 rounded-b-xl flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setNotesModalOpen(false);
+                      setNotesSession(null);
+                      setSessionNotes('');
+                    }}
+                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={saveNotesAndComplete}
+                    className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  >
+                    Mark as Completed
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============================================================================
     // MENTEES PAGE (FOR MENTORS)
     // =============================================================================
     function MenteesPage({ userProfile, isMobile }) {
@@ -11536,6 +12069,9 @@
       
       // Check-ins state
       const [weeklyCheckins, setWeeklyCheckins] = useState([]);
+      
+      // Sessions state
+      const [sessions, setSessions] = useState([]);
 
       // Journal tabs for mentor view
       const journalTabs = [
@@ -11547,6 +12083,7 @@
         { id: 'mistakes', label: 'Mistakes', icon: 'mistakes' },
         { id: 'assignments', label: 'Assignments', icon: 'assignments' },
         { id: 'checkins', label: 'Check-ins', icon: 'checkins' },
+        { id: 'sessions', label: 'Sessions', icon: 'sessions' },
       ];
 
       // Load mentees
@@ -11671,6 +12208,7 @@
           setTradeFlags([]);
           setAssignments([]);
           setWeeklyCheckins([]);
+          setSessions([]);
           return;
         }
 
@@ -11724,12 +12262,28 @@
             }
           );
 
+        // Subscribe to sessions (with error handling)
+        const unsubSessions = db.collection('users')
+          .doc(selectedMentee.id)
+          .collection('sessions')
+          .orderBy('dateTime', 'desc')
+          .onSnapshot(
+            (snapshot) => {
+              setSessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            },
+            (error) => {
+              console.log('Sessions error (update Firestore rules):', error.message);
+              setSessions([]);
+            }
+          );
+
         return () => {
           unsubFeedback();
           unsubFlags();
           unsubAssignments();
           unsubCheckins();
           unsubQuestions();
+          unsubSessions();
         };
       }, [selectedMentee?.id]);
 
@@ -11880,6 +12434,77 @@
           return true;
         } catch (err) {
           console.error('Failed to resolve question:', err);
+          return false;
+        }
+      };
+
+      // Create a session (mentor)
+      const createSession = async (sessionData) => {
+        if (!selectedMentee?.id) return false;
+
+        try {
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('sessions')
+            .add({
+              ...sessionData,
+              scheduledBy: 'mentor',
+              scheduledById: userProfile.uid,
+              scheduledByName: userProfile.displayName,
+              menteeId: selectedMentee.id,
+              menteeName: selectedMentee.displayName,
+              status: 'confirmed', // Mentor-created sessions are auto-confirmed
+              notes: '',
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          return true;
+        } catch (err) {
+          console.error('Failed to create session:', err);
+          return false;
+        }
+      };
+
+      // Update session status
+      const updateSessionStatus = async (sessionId, status, notes = null) => {
+        if (!selectedMentee?.id) return false;
+
+        try {
+          const updateData = {
+            status,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          };
+          if (notes !== null) {
+            updateData.notes = notes;
+          }
+          if (status === 'completed') {
+            updateData.completedAt = firebase.firestore.FieldValue.serverTimestamp();
+          }
+          
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('sessions')
+            .doc(sessionId)
+            .update(updateData);
+          return true;
+        } catch (err) {
+          console.error('Failed to update session:', err);
+          return false;
+        }
+      };
+
+      // Delete session
+      const deleteSession = async (sessionId) => {
+        if (!selectedMentee?.id) return false;
+
+        try {
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('sessions')
+            .doc(sessionId)
+            .delete();
+          return true;
+        } catch (err) {
+          console.error('Failed to delete session:', err);
           return false;
         }
       };
@@ -12591,6 +13216,18 @@
                 isMobile={isMobile}
               />
             );
+          case 'sessions':
+            return (
+              <MentorSessionsTab
+                sessions={sessions}
+                selectedMentee={selectedMentee}
+                userProfile={userProfile}
+                onCreateSession={createSession}
+                onUpdateStatus={updateSessionStatus}
+                onDeleteSession={deleteSession}
+                isMobile={isMobile}
+              />
+            );
           default:
             return null;
         }
@@ -13197,6 +13834,9 @@
       
       // Check-ins state for mentees
       const [myCheckins, setMyCheckins] = useState([]);
+      
+      // Sessions state for mentees
+      const [mySessions, setMySessions] = useState([]);
 
       // Listen for auth state changes
       useEffect(() => {
@@ -13227,6 +13867,7 @@
           setMyTradeQuestions([]);
           setMyAssignments([]);
           setMyCheckins([]);
+          setMySessions([]);
           return;
         }
 
@@ -13280,12 +13921,28 @@
             setMyCheckins(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           });
 
+        // Subscribe to sessions (with error handling)
+        const unsubSessions = db.collection('users')
+          .doc(user.uid)
+          .collection('sessions')
+          .orderBy('dateTime', 'desc')
+          .onSnapshot(
+            (snapshot) => {
+              setMySessions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+            },
+            (error) => {
+              console.log('Sessions error (update Firestore rules):', error.message);
+              setMySessions([]);
+            }
+          );
+
         return () => {
           unsubFeedback();
           unsubFlags();
           unsubQuestions();
           unsubAssignments();
           unsubCheckins();
+          unsubSessions();
         };
       }, [user, userProfile?.mentorId]);
 
@@ -13590,13 +14247,14 @@
       const getNavItems = () => {
         let items = [...NAV_ITEMS];
         
-        // Add Assignments and Check-ins for mentees (users with a mentor)
+        // Add Assignments, Check-ins, and Sessions for mentees (users with a mentor)
         if (userProfile?.mentorId) {
           // Insert after Goals
           const goalsIndex = items.findIndex(i => i.id === 'goals');
           items.splice(goalsIndex + 1, 0, 
             { id: 'assignments', label: 'Assignments', icon: 'assignments' },
-            { id: 'checkins', label: 'Check-ins', icon: 'checkins' }
+            { id: 'checkins', label: 'Check-ins', icon: 'checkins' },
+            { id: 'sessions', label: 'Sessions', icon: 'sessions' }
           );
         }
         
@@ -13628,6 +14286,8 @@
             return <>{inviteBanner}<AssignmentsPage assignments={myAssignments} journalState={journalState} userProfile={userProfile} isMobile={isMobile} onUpdateAssignment={updateMyAssignment} /></>;
           case 'checkins':
             return <>{inviteBanner}<CheckinsPage checkins={myCheckins} userProfile={userProfile} isMobile={isMobile} /></>;
+          case 'sessions':
+            return <>{inviteBanner}<SessionsPage sessions={mySessions} userProfile={userProfile} isMobile={isMobile} /></>;
           case 'setups':
             return <>{inviteBanner}<SetupsPage state={journalState} setState={saveJournalState} isMobile={isMobile} /></>;
           case 'mistakes':
