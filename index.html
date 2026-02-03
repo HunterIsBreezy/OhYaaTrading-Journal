@@ -373,6 +373,25 @@
     const BE_THRESHOLD = 0.01;
     const PNL_MISMATCH_THRESHOLD = 0.01;
 
+    // Feedback types for mentor comments on trades
+    const FEEDBACK_TYPES = {
+      general: { icon: '💬', label: 'General', bgColor: 'bg-blue-100', textColor: 'text-blue-700', borderColor: 'border-blue-200' },
+      question: { icon: '❓', label: 'Question', bgColor: 'bg-orange-100', textColor: 'text-orange-700', borderColor: 'border-orange-200' },
+      praise: { icon: '⭐', label: 'Praise', bgColor: 'bg-green-100', textColor: 'text-green-700', borderColor: 'border-green-200' },
+      improvement: { icon: '⚠️', label: 'Needs Improvement', bgColor: 'bg-yellow-100', textColor: 'text-yellow-700', borderColor: 'border-yellow-200' },
+      setup: { icon: '🎯', label: 'Setup Related', bgColor: 'bg-purple-100', textColor: 'text-purple-700', borderColor: 'border-purple-200' },
+      psychology: { icon: '🧠', label: 'Psychology', bgColor: 'bg-pink-100', textColor: 'text-pink-700', borderColor: 'border-pink-200' },
+      risk: { icon: '📏', label: 'Risk Management', bgColor: 'bg-red-100', textColor: 'text-red-700', borderColor: 'border-red-200' },
+    };
+
+    // Flag types for marking trades
+    const FLAG_TYPES = {
+      discuss: { icon: '🗣️', label: "Let's Discuss", bgColor: 'bg-blue-100', textColor: 'text-blue-700' },
+      great: { icon: '✨', label: 'Great Execution', bgColor: 'bg-green-100', textColor: 'text-green-700' },
+      risk_concern: { icon: '⚠️', label: 'Risk Concern', bgColor: 'bg-orange-100', textColor: 'text-orange-700' },
+      rule_violation: { icon: '🚫', label: 'Rule Violation', bgColor: 'bg-red-100', textColor: 'text-red-700' },
+    };
+
     const EMPTY_STATE = {
       trades: [],
       setups: [],
@@ -3088,7 +3107,23 @@
     // =============================================================================
     // TRADE LOG PAGE
     // =============================================================================
-    function TradeLogPage({ state, setState, isMobile, isReadOnly = false }) {
+    function TradeLogPage({ 
+      state, 
+      setState, 
+      isMobile, 
+      isReadOnly = false,
+      isMentorView = false,
+      tradeFeedback = [],
+      tradeFlags = [],
+      onAddFeedback,
+      onAddFlag,
+      onRemoveFlag,
+      onToggleFlagStatus,
+      // For mentee view
+      myTradeFeedback = [],
+      myTradeFlags = [],
+      markFeedbackAsRead,
+    }) {
       const [modalOpen, setModalOpen] = useState(false);
       const [editingTrade, setEditingTrade] = useState(null);
       const [sortField, setSortField] = useState('entryDate');
@@ -3099,6 +3134,30 @@
       const [notesModalData, setNotesModalData] = useState({ notes: '', title: '' });
       const [showFilters, setShowFilters] = useState(false);
       const [viewingTrade, setViewingTrade] = useState(null); // For read-only view modal
+      
+      // Feedback form state (for mentor)
+      const [feedbackType, setFeedbackType] = useState('general');
+      const [feedbackContent, setFeedbackContent] = useState('');
+      const [submittingFeedback, setSubmittingFeedback] = useState(false);
+      const [showFlagMenu, setShowFlagMenu] = useState(false);
+
+      // Get feedback for the current context (mentor view vs mentee view)
+      const activeFeedback = isMentorView ? tradeFeedback : myTradeFeedback;
+      const activeFlags = isMentorView ? tradeFlags : myTradeFlags;
+
+      // Get feedback for a specific trade
+      const getTradeFeedback = (tradeId) => activeFeedback.filter(f => f.tradeId === tradeId);
+      const getTradeFlag = (tradeId) => activeFlags.find(f => f.tradeId === tradeId);
+
+      // Mark feedback as read when mentee views a trade (not for mentor)
+      useEffect(() => {
+        if (!viewingTrade || isMentorView || !markFeedbackAsRead) return;
+        
+        const unreadFeedback = getTradeFeedback(viewingTrade.id).filter(f => !f.read);
+        if (unreadFeedback.length > 0) {
+          markFeedbackAsRead(unreadFeedback.map(f => f.id));
+        }
+      }, [viewingTrade?.id, isMentorView]);
       
       // Filter state
       const [filters, setFilters] = useState({
@@ -3819,6 +3878,11 @@
                       <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                         Screenshot
                       </th>
+                      {(isReadOnly || activeFeedback.length > 0 || activeFlags.length > 0) && (
+                        <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
+                          Feedback
+                        </th>
+                      )}
                       {!isReadOnly && (
                         <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap">
                           Actions
@@ -3830,8 +3894,8 @@
                     {filteredTrades.map(trade => (
                       <tr 
                         key={trade.id} 
-                        className={`hover:bg-gray-50 ${isReadOnly ? 'cursor-pointer' : ''}`}
-                        onClick={isReadOnly ? () => setViewingTrade(trade) : undefined}
+                        className={`hover:bg-gray-50 ${(isReadOnly || activeFeedback.length > 0) ? 'cursor-pointer' : ''}`}
+                        onClick={(isReadOnly || activeFeedback.length > 0) ? () => setViewingTrade(trade) : undefined}
                       >
                         <td className="px-4 py-3 text-sm text-gray-900 whitespace-nowrap">{trade.entryDate}</td>
                         <td className="px-4 py-3 text-sm font-medium text-gray-900 whitespace-nowrap">{trade.ticker}</td>
@@ -3916,6 +3980,56 @@
                             <span className="text-gray-300">-</span>
                           )}
                         </td>
+                        {/* Feedback Column */}
+                        {(isReadOnly || activeFeedback.length > 0 || activeFlags.length > 0) && (
+                          <td className="px-4 py-3 text-center whitespace-nowrap">
+                            {(() => {
+                              const feedback = getTradeFeedback(trade.id);
+                              const flag = getTradeFlag(trade.id);
+                              const hasContent = feedback.length > 0 || flag;
+                              const hasUnread = feedback.some(f => !f.read);
+                              
+                              if (!hasContent) {
+                                return <span className="text-gray-300">-</span>;
+                              }
+                              
+                              return (
+                                <div className="flex items-center justify-center gap-1">
+                                  {/* Flag indicator */}
+                                  {flag && (
+                                    <span 
+                                      className={`text-sm ${flag.status === 'resolved' ? 'opacity-50' : ''}`}
+                                      title={`${FLAG_TYPES[flag.flagType]?.label || 'Flagged'}${flag.status === 'resolved' ? ' (Resolved)' : ''}`}
+                                    >
+                                      {FLAG_TYPES[flag.flagType]?.icon || '🚩'}
+                                    </span>
+                                  )}
+                                  {/* Feedback icons */}
+                                  {feedback.length > 0 && (
+                                    <div className={`flex items-center gap-0.5 ${hasUnread ? 'relative' : ''}`}>
+                                      {/* Show first 2 unique feedback type icons */}
+                                      {[...new Set(feedback.map(f => f.type))].slice(0, 2).map((type, idx) => (
+                                        <span key={idx} className="text-sm" title={FEEDBACK_TYPES[type]?.label}>
+                                          {FEEDBACK_TYPES[type]?.icon || '💬'}
+                                        </span>
+                                      ))}
+                                      {/* Count badge */}
+                                      {feedback.length > 1 && (
+                                        <span className="text-xs bg-gray-200 text-gray-600 px-1 rounded">
+                                          {feedback.length}
+                                        </span>
+                                      )}
+                                      {/* Unread dot */}
+                                      {hasUnread && (
+                                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-blue-500 rounded-full"></span>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </td>
+                        )}
                         {!isReadOnly && (
                           <td className="px-4 py-3 text-right whitespace-nowrap">
                             <button
@@ -3962,8 +4076,8 @@
             title={notesModalData.title}
           />
 
-          {/* Read-only Trade View Modal */}
-          {isReadOnly && viewingTrade && (
+          {/* Trade View Modal (for read-only/mentor view OR mentee viewing feedback) */}
+          {viewingTrade && (isReadOnly || activeFeedback.length > 0) && (
             <div className="fixed inset-0 z-50 overflow-y-auto">
               <div className="fixed inset-0 bg-black/50" onClick={() => setViewingTrade(null)} />
               <div className="relative min-h-screen flex items-start md:items-center justify-center p-2 md:p-4 pt-4">
@@ -3974,7 +4088,9 @@
                       <h2 className="text-lg md:text-xl font-semibold text-gray-900">
                         {viewingTrade.ticker} - {viewingTrade.entryDate}
                       </h2>
-                      <p className="text-sm text-gray-500">Trade Details (Read-Only)</p>
+                      <p className="text-sm text-gray-500">
+                        {isMentorView ? 'Trade Details (Read-Only)' : 'Trade Details & Feedback'}
+                      </p>
                     </div>
                     <button onClick={() => setViewingTrade(null)} className="p-2 hover:bg-gray-100 rounded-lg">
                       {Icons.x}
@@ -4061,13 +4177,184 @@
                       </div>
                     )}
 
-                    {/* Mentor Feedback Placeholder */}
+                    {/* Trade Flag Section */}
+                    {(() => {
+                      const flag = getTradeFlag(viewingTrade.id);
+                      return (
+                        <div className="border-t border-gray-200 pt-4">
+                          <div className="flex items-center justify-between mb-3">
+                            <p className="text-sm font-medium text-gray-700">Trade Flag</p>
+                            {isMentorView && flag && (
+                              <button
+                                onClick={() => toggleFlagStatus(viewingTrade.id)}
+                                className={`text-xs px-2 py-1 rounded ${
+                                  flag.status === 'open' 
+                                    ? 'bg-green-100 text-green-700 hover:bg-green-200' 
+                                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                              >
+                                {flag.status === 'open' ? 'Mark Resolved' : 'Reopen'}
+                              </button>
+                            )}
+                          </div>
+                          
+                          {flag ? (
+                            <div className={`p-3 rounded-lg border ${FLAG_TYPES[flag.flagType]?.bgColor || 'bg-gray-50'} ${flag.status === 'resolved' ? 'opacity-60' : ''}`}>
+                              <div className="flex items-center gap-2 mb-1">
+                                <span className="text-lg">{FLAG_TYPES[flag.flagType]?.icon || '🚩'}</span>
+                                <span className={`font-medium ${FLAG_TYPES[flag.flagType]?.textColor || 'text-gray-700'}`}>
+                                  {FLAG_TYPES[flag.flagType]?.label || 'Flagged'}
+                                </span>
+                                {flag.status === 'resolved' && (
+                                  <span className="text-xs bg-gray-200 text-gray-600 px-2 py-0.5 rounded-full">Resolved</span>
+                                )}
+                              </div>
+                              {flag.note && <p className="text-sm text-gray-600 mt-1">{flag.note}</p>}
+                              <p className="text-xs text-gray-400 mt-2">Flagged by {flag.mentorName}</p>
+                              {isMentorView && (
+                                <button
+                                  onClick={() => removeFlag(viewingTrade.id)}
+                                  className="text-xs text-red-500 hover:text-red-700 mt-2"
+                                >
+                                  Remove Flag
+                                </button>
+                              )}
+                            </div>
+                          ) : isMentorView ? (
+                            <div className="relative">
+                              <button
+                                onClick={() => setShowFlagMenu(!showFlagMenu)}
+                                className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm text-gray-700"
+                              >
+                                <span>🚩</span>
+                                <span>Flag this Trade</span>
+                                <svg className={`w-4 h-4 transition-transform ${showFlagMenu ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                </svg>
+                              </button>
+                              {showFlagMenu && (
+                                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg z-10 min-w-[200px]">
+                                  {Object.entries(FLAG_TYPES).map(([key, val]) => (
+                                    <button
+                                      key={key}
+                                      onClick={() => {
+                                        onAddFlag(viewingTrade.id, key);
+                                        setShowFlagMenu(false);
+                                      }}
+                                      className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 text-left text-sm"
+                                    >
+                                      <span>{val.icon}</span>
+                                      <span>{val.label}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-sm text-gray-400">No flag on this trade</p>
+                          )}
+                        </div>
+                      );
+                    })()}
+
+                    {/* Mentor Feedback Section */}
                     <div className="border-t border-gray-200 pt-4">
-                      <p className="text-sm font-medium text-gray-700 mb-2">Mentor Feedback</p>
-                      <div className="bg-gray-50 rounded-lg p-4 text-center text-gray-400 text-sm">
-                        <p>No feedback yet</p>
-                        <p className="text-xs mt-1">(Coming in Phase 2)</p>
-                      </div>
+                      <p className="text-sm font-medium text-gray-700 mb-3">Mentor Feedback</p>
+                      
+                      {/* Existing Feedback List */}
+                      {(() => {
+                        const feedback = getTradeFeedback(viewingTrade.id);
+                        return feedback.length > 0 ? (
+                          <div className="space-y-3 mb-4">
+                            {feedback.map((fb) => {
+                              const typeInfo = FEEDBACK_TYPES[fb.type] || FEEDBACK_TYPES.general;
+                              return (
+                                <div 
+                                  key={fb.id} 
+                                  className={`p-3 rounded-lg border ${typeInfo.bgColor} ${typeInfo.borderColor}`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    <span className="text-lg flex-shrink-0">{typeInfo.icon}</span>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <span className={`text-xs font-medium ${typeInfo.textColor}`}>
+                                          {typeInfo.label}
+                                        </span>
+                                        {!fb.read && !isMentorView && (
+                                          <span className="text-xs bg-blue-500 text-white px-1.5 py-0.5 rounded">New</span>
+                                        )}
+                                      </div>
+                                      <p className="text-sm text-gray-700">{fb.content}</p>
+                                      <p className="text-xs text-gray-400 mt-2">
+                                        {fb.mentorName} • {fb.createdAt?.toDate ? fb.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                                      </p>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400 mb-4">No feedback yet</p>
+                        );
+                      })()}
+
+                      {/* Add Feedback Form (Mentor Only) */}
+                      {isMentorView && (
+                        <div className="bg-gray-50 rounded-lg p-4">
+                          <p className="text-sm font-medium text-gray-700 mb-3">Add Feedback</p>
+                          
+                          {/* Feedback Type Selector */}
+                          <div className="mb-3">
+                            <label className="block text-xs text-gray-500 mb-1">Feedback Type</label>
+                            <div className="flex flex-wrap gap-2">
+                              {Object.entries(FEEDBACK_TYPES).map(([key, val]) => (
+                                <button
+                                  key={key}
+                                  onClick={() => setFeedbackType(key)}
+                                  className={`flex items-center gap-1 px-2 py-1 rounded text-sm border transition-colors ${
+                                    feedbackType === key 
+                                      ? `${val.bgColor} ${val.textColor} ${val.borderColor}` 
+                                      : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                  }`}
+                                >
+                                  <span>{val.icon}</span>
+                                  <span className="hidden sm:inline">{val.label}</span>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Feedback Content */}
+                          <div className="mb-3">
+                            <textarea
+                              value={feedbackContent}
+                              onChange={(e) => setFeedbackContent(e.target.value)}
+                              placeholder="Write your feedback..."
+                              rows={3}
+                              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            />
+                          </div>
+
+                          {/* Submit Button */}
+                          <button
+                            onClick={async () => {
+                              if (!feedbackContent.trim()) return;
+                              setSubmittingFeedback(true);
+                              const success = await onAddFeedback(viewingTrade.id, feedbackType, feedbackContent);
+                              if (success) {
+                                setFeedbackContent('');
+                                setFeedbackType('general');
+                              }
+                              setSubmittingFeedback(false);
+                            }}
+                            disabled={!feedbackContent.trim() || submittingFeedback}
+                            className="w-full py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                          >
+                            {submittingFeedback ? 'Adding...' : 'Add Feedback'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -8561,6 +8848,10 @@
       const [loadingMenteeData, setLoadingMenteeData] = useState(false);
       const [activeJournalTab, setActiveJournalTab] = useState('dashboard');
       const [selectedDate, setSelectedDate] = useState(todayISO());
+      
+      // Feedback state
+      const [tradeFeedback, setTradeFeedback] = useState([]);
+      const [tradeFlags, setTradeFlags] = useState([]);
 
       // Journal tabs for mentor view
       const journalTabs = [
@@ -8590,6 +8881,145 @@
 
         return () => unsubscribe();
       }, [userProfile?.uid]);
+
+      // Load feedback when mentee selected
+      useEffect(() => {
+        if (!selectedMentee?.id) {
+          setTradeFeedback([]);
+          setTradeFlags([]);
+          return;
+        }
+
+        // Subscribe to feedback
+        const unsubFeedback = db.collection('users')
+          .doc(selectedMentee.id)
+          .collection('tradeFeedback')
+          .orderBy('createdAt', 'desc')
+          .onSnapshot((snapshot) => {
+            setTradeFeedback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
+        // Subscribe to flags
+        const unsubFlags = db.collection('users')
+          .doc(selectedMentee.id)
+          .collection('tradeFlags')
+          .onSnapshot((snapshot) => {
+            setTradeFlags(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
+        return () => {
+          unsubFeedback();
+          unsubFlags();
+        };
+      }, [selectedMentee?.id]);
+
+      // Add feedback to a trade
+      const addFeedback = async (tradeId, type, content) => {
+        if (!selectedMentee?.id || !content.trim()) return;
+
+        try {
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('tradeFeedback')
+            .add({
+              tradeId,
+              mentorId: userProfile.uid,
+              mentorName: userProfile.displayName,
+              type,
+              content: content.trim(),
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              read: false,
+            });
+          return true;
+        } catch (err) {
+          console.error('Failed to add feedback:', err);
+          return false;
+        }
+      };
+
+      // Add/update flag on a trade
+      const addFlag = async (tradeId, flagType, note = '') => {
+        if (!selectedMentee?.id) return;
+
+        try {
+          // Check if flag already exists for this trade
+          const existingFlag = tradeFlags.find(f => f.tradeId === tradeId);
+          
+          if (existingFlag) {
+            // Update existing flag
+            await db.collection('users')
+              .doc(selectedMentee.id)
+              .collection('tradeFlags')
+              .doc(existingFlag.id)
+              .update({
+                flagType,
+                note,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+          } else {
+            // Create new flag
+            await db.collection('users')
+              .doc(selectedMentee.id)
+              .collection('tradeFlags')
+              .add({
+                tradeId,
+                mentorId: userProfile.uid,
+                mentorName: userProfile.displayName,
+                flagType,
+                note,
+                status: 'open',
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+          }
+          return true;
+        } catch (err) {
+          console.error('Failed to add flag:', err);
+          return false;
+        }
+      };
+
+      // Remove flag from a trade
+      const removeFlag = async (tradeId) => {
+        if (!selectedMentee?.id) return;
+
+        try {
+          const existingFlag = tradeFlags.find(f => f.tradeId === tradeId);
+          if (existingFlag) {
+            await db.collection('users')
+              .doc(selectedMentee.id)
+              .collection('tradeFlags')
+              .doc(existingFlag.id)
+              .delete();
+          }
+          return true;
+        } catch (err) {
+          console.error('Failed to remove flag:', err);
+          return false;
+        }
+      };
+
+      // Resolve/reopen flag
+      const toggleFlagStatus = async (tradeId) => {
+        if (!selectedMentee?.id) return;
+
+        try {
+          const existingFlag = tradeFlags.find(f => f.tradeId === tradeId);
+          if (existingFlag) {
+            await db.collection('users')
+              .doc(selectedMentee.id)
+              .collection('tradeFlags')
+              .doc(existingFlag.id)
+              .update({
+                status: existingFlag.status === 'open' ? 'resolved' : 'open',
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+          }
+          return true;
+        } catch (err) {
+          console.error('Failed to toggle flag status:', err);
+          return false;
+        }
+      };
 
       // Send invite
       const handleInvite = async (e) => {
@@ -8733,6 +9163,8 @@
         setSelectedMentee(null);
         setMenteeData(null);
         setActiveJournalTab('dashboard');
+        setTradeFeedback([]);
+        setTradeFlags([]);
       };
 
       // Render the active journal tab content
@@ -8772,6 +9204,13 @@
                 setState={readOnlySetState}
                 isMobile={isMobile}
                 isReadOnly={true}
+                isMentorView={true}
+                tradeFeedback={tradeFeedback}
+                tradeFlags={tradeFlags}
+                onAddFeedback={addFeedback}
+                onAddFlag={addFlag}
+                onRemoveFlag={removeFlag}
+                onToggleFlagStatus={toggleFlagStatus}
               />
             );
           case 'calendar':
@@ -9103,6 +9542,10 @@
       const [storageInfo, setStorageInfo] = useState({ bytes: 0, megabytes: 0, percentUsed: 0, nearLimit: false });
       const [isMobile, setIsMobile] = useState(false);
       const [dataLoading, setDataLoading] = useState(true);
+      
+      // Feedback state for mentees
+      const [myTradeFeedback, setMyTradeFeedback] = useState([]);
+      const [myTradeFlags, setMyTradeFlags] = useState([]);
 
       // Listen for auth state changes
       useEffect(() => {
@@ -9124,6 +9567,54 @@
 
         return () => unsubscribe();
       }, []);
+
+      // Load feedback for mentees (users with a mentor)
+      useEffect(() => {
+        if (!user || !userProfile?.mentorId) {
+          setMyTradeFeedback([]);
+          setMyTradeFlags([]);
+          return;
+        }
+
+        // Subscribe to feedback
+        const unsubFeedback = db.collection('users')
+          .doc(user.uid)
+          .collection('tradeFeedback')
+          .orderBy('createdAt', 'desc')
+          .onSnapshot((snapshot) => {
+            setMyTradeFeedback(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
+        // Subscribe to flags
+        const unsubFlags = db.collection('users')
+          .doc(user.uid)
+          .collection('tradeFlags')
+          .onSnapshot((snapshot) => {
+            setMyTradeFlags(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
+        return () => {
+          unsubFeedback();
+          unsubFlags();
+        };
+      }, [user, userProfile?.mentorId]);
+
+      // Mark feedback as read when mentee views it
+      const markFeedbackAsRead = async (feedbackIds) => {
+        if (!user || !feedbackIds.length) return;
+        
+        const batch = db.batch();
+        feedbackIds.forEach(id => {
+          const ref = db.collection('users').doc(user.uid).collection('tradeFeedback').doc(id);
+          batch.update(ref, { read: true });
+        });
+        
+        try {
+          await batch.commit();
+        } catch (err) {
+          console.error('Failed to mark feedback as read:', err);
+        }
+      };
 
       // Load user's journal data from Firestore
       useEffect(() => {
@@ -9353,7 +9844,7 @@
           case 'dashboard':
             return <>{inviteBanner}<DashboardPage state={journalState} setState={saveJournalState} setActivePage={setActivePage} setSelectedDate={setSelectedDate} isMobile={isMobile} /></>;
           case 'tradelog':
-            return <>{inviteBanner}<TradeLogPage state={journalState} setState={saveJournalState} isMobile={isMobile} /></>;
+            return <>{inviteBanner}<TradeLogPage state={journalState} setState={saveJournalState} isMobile={isMobile} myTradeFeedback={myTradeFeedback} myTradeFlags={myTradeFlags} markFeedbackAsRead={markFeedbackAsRead} /></>;
           case 'calendar':
             return <>{inviteBanner}<CalendarPage state={journalState} setState={saveJournalState} selectedDate={selectedDate} setSelectedDate={setSelectedDate} isMobile={isMobile} /></>;
           case 'goals':
