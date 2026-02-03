@@ -588,6 +588,12 @@
           <path d="M9 14l2 2 4-4" />
         </svg>
       ),
+      checkins: (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+          <path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" />
+          <path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01" />
+        </svg>
+      ),
     };
 
     // =============================================================================
@@ -603,6 +609,61 @@
 
     function generateId() {
       return crypto.randomUUID();
+    }
+
+    // Get week bounds (Monday to Sunday) for a given date
+    function getWeekBounds(date = new Date()) {
+      const d = new Date(date);
+      const day = d.getDay();
+      const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+      const monday = new Date(d.setDate(diff));
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      return {
+        start: monday.toISOString().split('T')[0],
+        end: sunday.toISOString().split('T')[0],
+      };
+    }
+
+    // Get list of recent weeks for dropdown
+    function getRecentWeeks(count = 8) {
+      const weeks = [];
+      const today = new Date();
+      for (let i = 0; i < count; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - (i * 7));
+        weeks.push(getWeekBounds(d));
+      }
+      return weeks;
+    }
+
+    // Format week range for display
+    function formatWeekRange(start, end) {
+      const startDate = new Date(start + 'T00:00:00');
+      const endDate = new Date(end + 'T00:00:00');
+      const options = { month: 'short', day: 'numeric' };
+      return `${startDate.toLocaleDateString('en-US', options)} - ${endDate.toLocaleDateString('en-US', options)}, ${endDate.getFullYear()}`;
+    }
+
+    // Calculate week stats from trades
+    function calculateWeekStats(trades, weekStart, weekEnd) {
+      const weekTrades = trades.filter(t => {
+        const date = t.exitDate || t.entryDate;
+        return date >= weekStart && date <= weekEnd;
+      }).map(t => ({ ...t, derived: calcTradeDerived(t) }));
+
+      const closedTrades = weekTrades.filter(t => !t.derived.isOpen);
+      const wins = closedTrades.filter(t => t.derived.winLoss === 'W');
+      const pnls = closedTrades.map(t => t.derived.pnlFinal || 0);
+      
+      return {
+        totalTrades: closedTrades.length,
+        winRate: closedTrades.length > 0 ? (wins.length / closedTrades.length) * 100 : 0,
+        totalPnL: closedTrades.reduce((sum, t) => sum + (t.derived.pnlFinal || 0), 0),
+        biggestWin: pnls.length > 0 ? Math.max(0, ...pnls) : 0,
+        biggestLoss: pnls.length > 0 ? Math.min(0, ...pnls) : 0,
+      };
     }
 
     function calcTradeDerived(trade) {
@@ -8888,6 +8949,199 @@
     }
 
     // =============================================================================
+    // CHECK-INS PAGE (Mentee's view of their weekly check-ins)
+    // =============================================================================
+    function CheckinsPage({ 
+      checkins, 
+      userProfile,
+      isMobile,
+    }) {
+      const [expandedCheckin, setExpandedCheckin] = useState(null);
+
+      // Get the most recent check-in
+      const latestCheckin = checkins[0];
+      const olderCheckins = checkins.slice(1);
+
+      // Find current week's focus from most recent check-in
+      const currentFocus = latestCheckin?.focusForNextWeek;
+
+      if (!userProfile?.mentorId) {
+        return (
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+              📅
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">No Check-ins</h3>
+            <p className="text-gray-500">Connect with a mentor to receive weekly check-ins and feedback.</p>
+          </div>
+        );
+      }
+
+      return (
+        <div className="space-y-6">
+          {/* Header */}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">Weekly Check-ins</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              From your mentor: {userProfile.mentorName}
+            </p>
+          </div>
+
+          {/* Current Focus Banner */}
+          {currentFocus && (
+            <div className="bg-gradient-to-r from-orange-500 to-amber-500 rounded-xl p-4 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xl">🔥</span>
+                <h2 className="font-semibold">This Week's Focus</h2>
+              </div>
+              <p className="text-orange-100">{currentFocus}</p>
+            </div>
+          )}
+
+          {/* Latest Check-in */}
+          {latestCheckin ? (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
+                <h2 className="font-semibold text-gray-900">
+                  Latest: Week of {formatWeekRange(latestCheckin.weekStart, latestCheckin.weekEnd)}
+                </h2>
+              </div>
+              <div className="p-6 space-y-4">
+                {/* Stats */}
+                {latestCheckin.stats && (
+                  <div className="grid grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-gray-900">{latestCheckin.stats.totalTrades}</p>
+                      <p className="text-xs text-gray-500">Trades</p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-gray-900">{(latestCheckin.stats.winRate || 0).toFixed(0)}%</p>
+                      <p className="text-xs text-gray-500">Win Rate</p>
+                    </div>
+                    <div className="text-center">
+                      <p className={`text-2xl font-bold ${(latestCheckin.stats.totalPnL || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {formatCurrency(latestCheckin.stats.totalPnL || 0)}
+                      </p>
+                      <p className="text-xs text-gray-500">P&L</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Summary */}
+                {latestCheckin.summary && (
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-1">Summary</h3>
+                    <p className="text-gray-600 whitespace-pre-wrap">{latestCheckin.summary}</p>
+                  </div>
+                )}
+
+                {/* What Went Well */}
+                {latestCheckin.whatWentWell && (
+                  <div className="bg-emerald-50 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-emerald-700 mb-1">💪 What Went Well</h3>
+                    <p className="text-emerald-800 whitespace-pre-wrap">{latestCheckin.whatWentWell}</p>
+                  </div>
+                )}
+
+                {/* Areas to Improve */}
+                {latestCheckin.areasToImprove && (
+                  <div className="bg-amber-50 rounded-lg p-4">
+                    <h3 className="text-sm font-medium text-amber-700 mb-1">🎯 Areas to Improve</h3>
+                    <p className="text-amber-800 whitespace-pre-wrap">{latestCheckin.areasToImprove}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                📅
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No check-ins yet</h3>
+              <p className="text-gray-500">Your mentor will post weekly check-ins to track your progress.</p>
+            </div>
+          )}
+
+          {/* Previous Check-ins */}
+          {olderCheckins.length > 0 && (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200">
+                <h2 className="font-semibold text-gray-900">Previous Check-ins ({olderCheckins.length})</h2>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {olderCheckins.map(checkin => {
+                  const isExpanded = expandedCheckin === checkin.id;
+                  const stats = checkin.stats || {};
+                  
+                  return (
+                    <div key={checkin.id} className="p-4">
+                      <button
+                        onClick={() => setExpandedCheckin(isExpanded ? null : checkin.id)}
+                        className="w-full flex items-center justify-between text-left"
+                      >
+                        <div>
+                          <h3 className="font-medium text-gray-900">
+                            Week of {formatWeekRange(checkin.weekStart, checkin.weekEnd)}
+                          </h3>
+                          <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
+                            <span>{stats.totalTrades || 0} trades</span>
+                            <span>|</span>
+                            <span>{(stats.winRate || 0).toFixed(0)}% WR</span>
+                            <span>|</span>
+                            <span className={(stats.totalPnL || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                              {formatCurrency(stats.totalPnL || 0)}
+                            </span>
+                          </div>
+                        </div>
+                        <svg 
+                          className={`w-5 h-5 text-gray-400 transition-transform ${isExpanded ? 'rotate-180' : ''}`} 
+                          fill="none" 
+                          stroke="currentColor" 
+                          viewBox="0 0 24 24"
+                        >
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </button>
+
+                      {isExpanded && (
+                        <div className="mt-4 space-y-3 pl-4 border-l-2 border-gray-200">
+                          {checkin.summary && (
+                            <div>
+                              <h4 className="text-xs font-medium text-gray-500 mb-1">Summary</h4>
+                              <p className="text-sm text-gray-600">{checkin.summary}</p>
+                            </div>
+                          )}
+                          {checkin.whatWentWell && (
+                            <div>
+                              <h4 className="text-xs font-medium text-emerald-600 mb-1">💪 What Went Well</h4>
+                              <p className="text-sm text-gray-600">{checkin.whatWentWell}</p>
+                            </div>
+                          )}
+                          {checkin.areasToImprove && (
+                            <div>
+                              <h4 className="text-xs font-medium text-amber-600 mb-1">🎯 Areas to Improve</h4>
+                              <p className="text-sm text-gray-600">{checkin.areasToImprove}</p>
+                            </div>
+                          )}
+                          {checkin.focusForNextWeek && (
+                            <div>
+                              <h4 className="text-xs font-medium text-orange-600 mb-1">🔥 Focus</h4>
+                              <p className="text-sm text-gray-600">{checkin.focusForNextWeek}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============================================================================
     // ASSIGNMENTS PAGE (Mentee's view of their assignments)
     // =============================================================================
     function AssignmentsPage({ 
@@ -9937,6 +10191,306 @@
     }
 
     // =============================================================================
+    // MENTOR CHECK-INS TAB (Mentor view of weekly check-ins)
+    // =============================================================================
+    function MentorCheckinsTab({ 
+      checkins, 
+      menteeData, 
+      selectedMentee,
+      onCreateCheckin, 
+      onDeleteCheckin,
+      isMobile 
+    }) {
+      const [modalOpen, setModalOpen] = useState(false);
+      const [editingCheckin, setEditingCheckin] = useState(null);
+      const [selectedWeek, setSelectedWeek] = useState(getWeekBounds());
+      
+      // Form state
+      const [formData, setFormData] = useState({
+        summary: '',
+        whatWentWell: '',
+        areasToImprove: '',
+        focusForNextWeek: '',
+      });
+
+      const recentWeeks = getRecentWeeks(12);
+
+      // Calculate stats for selected week
+      const weekStats = useMemo(() => {
+        if (!menteeData?.trades) return null;
+        return calculateWeekStats(menteeData.trades, selectedWeek.start, selectedWeek.end);
+      }, [menteeData?.trades, selectedWeek]);
+
+      const resetForm = () => {
+        setFormData({
+          summary: '',
+          whatWentWell: '',
+          areasToImprove: '',
+          focusForNextWeek: '',
+        });
+        setEditingCheckin(null);
+      };
+
+      const openNewCheckin = () => {
+        resetForm();
+        setSelectedWeek(getWeekBounds());
+        setModalOpen(true);
+      };
+
+      const openEditCheckin = (checkin) => {
+        setEditingCheckin(checkin);
+        setSelectedWeek({ start: checkin.weekStart, end: checkin.weekEnd });
+        setFormData({
+          summary: checkin.summary || '',
+          whatWentWell: checkin.whatWentWell || '',
+          areasToImprove: checkin.areasToImprove || '',
+          focusForNextWeek: checkin.focusForNextWeek || '',
+        });
+        setModalOpen(true);
+      };
+
+      const handleSaveCheckin = async () => {
+        const checkinData = {
+          weekStart: selectedWeek.start,
+          weekEnd: selectedWeek.end,
+          stats: weekStats,
+          summary: formData.summary.trim(),
+          whatWentWell: formData.whatWentWell.trim(),
+          areasToImprove: formData.areasToImprove.trim(),
+          focusForNextWeek: formData.focusForNextWeek.trim(),
+        };
+
+        const success = await onCreateCheckin(checkinData);
+        if (success) {
+          setModalOpen(false);
+          resetForm();
+        }
+      };
+
+      return (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Weekly Check-ins</h1>
+              <p className="text-sm text-gray-500 mt-1">
+                {checkins.length} check-in{checkins.length !== 1 ? 's' : ''} for {selectedMentee?.displayName}
+              </p>
+            </div>
+            <button
+              onClick={openNewCheckin}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+            >
+              {Icons.plus}
+              <span>New Check-in</span>
+            </button>
+          </div>
+
+          {/* Check-ins List */}
+          {checkins.length === 0 ? (
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                📅
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No check-ins yet</h3>
+              <p className="text-gray-500 mb-4">Create your first weekly check-in to track progress</p>
+              <button
+                onClick={openNewCheckin}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                {Icons.plus}
+                <span>Create First Check-in</span>
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {checkins.map(checkin => {
+                const stats = checkin.stats || {};
+                return (
+                  <div 
+                    key={checkin.id}
+                    className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 hover:border-gray-300 transition-colors cursor-pointer"
+                    onClick={() => openEditCheckin(checkin)}
+                  >
+                    <div className="flex items-start justify-between mb-3">
+                      <div>
+                        <h3 className="font-semibold text-gray-900">
+                          Week of {formatWeekRange(checkin.weekStart, checkin.weekEnd)}
+                        </h3>
+                        <div className="flex items-center gap-3 mt-1 text-sm text-gray-600">
+                          <span>📊 {stats.totalTrades || 0} trades</span>
+                          <span>|</span>
+                          <span>{(stats.winRate || 0).toFixed(0)}% WR</span>
+                          <span>|</span>
+                          <span className={stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}>
+                            {formatCurrency(stats.totalPnL || 0)}
+                          </span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (confirm('Delete this check-in?')) {
+                            onDeleteCheckin(checkin.id);
+                          }
+                        }}
+                        className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                      >
+                        {Icons.trash}
+                      </button>
+                    </div>
+
+                    {checkin.summary && (
+                      <p className="text-gray-600 text-sm mb-2 line-clamp-2">"{checkin.summary}"</p>
+                    )}
+
+                    {checkin.focusForNextWeek && (
+                      <div className="flex items-center gap-2 text-sm">
+                        <span className="text-orange-500">🔥</span>
+                        <span className="text-gray-600">Focus: {checkin.focusForNextWeek}</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Create/Edit Check-in Modal */}
+          {modalOpen && (
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+              <div className="fixed inset-0 bg-black/50" onClick={() => { setModalOpen(false); resetForm(); }} />
+              <div className="relative min-h-screen flex items-center justify-center p-4">
+                <div className="relative bg-white rounded-xl shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+                  <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 rounded-t-xl">
+                    <h2 className="text-lg font-semibold text-gray-900">
+                      {editingCheckin ? 'Edit Check-in' : 'New Weekly Check-in'}
+                    </h2>
+                  </div>
+                  <div className="p-6 space-y-4">
+                    {/* Week Selector */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Week</label>
+                      <select
+                        value={`${selectedWeek.start}|${selectedWeek.end}`}
+                        onChange={(e) => {
+                          const [start, end] = e.target.value.split('|');
+                          setSelectedWeek({ start, end });
+                        }}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        {recentWeeks.map(week => (
+                          <option key={week.start} value={`${week.start}|${week.end}`}>
+                            {formatWeekRange(week.start, week.end)}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {/* Week Stats */}
+                    {weekStats && (
+                      <div className="bg-gray-50 rounded-lg p-4">
+                        <h4 className="text-sm font-medium text-gray-700 mb-2">📊 Week Stats</h4>
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                          <div>
+                            <p className="text-2xl font-bold text-gray-900">{weekStats.totalTrades}</p>
+                            <p className="text-xs text-gray-500">Trades</p>
+                          </div>
+                          <div>
+                            <p className="text-2xl font-bold text-gray-900">{weekStats.winRate.toFixed(0)}%</p>
+                            <p className="text-xs text-gray-500">Win Rate</p>
+                          </div>
+                          <div>
+                            <p className={`text-2xl font-bold ${weekStats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {formatCurrency(weekStats.totalPnL)}
+                            </p>
+                            <p className="text-xs text-gray-500">P&L</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-gray-200">
+                          <div className="text-center">
+                            <p className="text-sm font-medium text-emerald-600">{formatCurrency(weekStats.biggestWin)}</p>
+                            <p className="text-xs text-gray-500">Biggest Win</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-sm font-medium text-red-600">{formatCurrency(weekStats.biggestLoss)}</p>
+                            <p className="text-xs text-gray-500">Biggest Loss</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Summary */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Overall Summary</label>
+                      <textarea
+                        value={formData.summary}
+                        onChange={(e) => setFormData({ ...formData, summary: e.target.value })}
+                        placeholder="How did this week go overall?"
+                        rows={3}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* What Went Well */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">💪 What Went Well</label>
+                      <textarea
+                        value={formData.whatWentWell}
+                        onChange={(e) => setFormData({ ...formData, whatWentWell: e.target.value })}
+                        placeholder="Positives from this week..."
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Areas to Improve */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">🎯 Areas to Improve</label>
+                      <textarea
+                        value={formData.areasToImprove}
+                        onChange={(e) => setFormData({ ...formData, areasToImprove: e.target.value })}
+                        placeholder="What needs work..."
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+
+                    {/* Focus for Next Week */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">🔥 Focus for Next Week</label>
+                      <textarea
+                        value={formData.focusForNextWeek}
+                        onChange={(e) => setFormData({ ...formData, focusForNextWeek: e.target.value })}
+                        placeholder="Key priorities for the coming week..."
+                        rows={2}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="sticky bottom-0 bg-white border-t border-gray-200 px-6 py-4 rounded-b-xl flex justify-end gap-3">
+                    <button
+                      onClick={() => { setModalOpen(false); resetForm(); }}
+                      className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveCheckin}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                    >
+                      {editingCheckin ? 'Update Check-in' : 'Save Check-in'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    // =============================================================================
     // MENTEES PAGE (FOR MENTORS)
     // =============================================================================
     function MenteesPage({ userProfile, isMobile }) {
@@ -9959,6 +10513,9 @@
       // Assignments state
       const [assignments, setAssignments] = useState([]);
       const [assignmentModalOpen, setAssignmentModalOpen] = useState(false);
+      
+      // Check-ins state
+      const [weeklyCheckins, setWeeklyCheckins] = useState([]);
 
       // Journal tabs for mentor view
       const journalTabs = [
@@ -9969,6 +10526,7 @@
         { id: 'setups', label: 'Setups', icon: 'setups' },
         { id: 'mistakes', label: 'Mistakes', icon: 'mistakes' },
         { id: 'assignments', label: 'Assignments', icon: 'assignments' },
+        { id: 'checkins', label: 'Check-ins', icon: 'checkins' },
       ];
 
       // Load mentees
@@ -9990,12 +10548,13 @@
         return () => unsubscribe();
       }, [userProfile?.uid]);
 
-      // Load feedback and assignments when mentee selected
+      // Load feedback, assignments, and checkins when mentee selected
       useEffect(() => {
         if (!selectedMentee?.id) {
           setTradeFeedback([]);
           setTradeFlags([]);
           setAssignments([]);
+          setWeeklyCheckins([]);
           return;
         }
 
@@ -10025,10 +10584,20 @@
             setAssignments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           });
 
+        // Subscribe to weekly check-ins
+        const unsubCheckins = db.collection('users')
+          .doc(selectedMentee.id)
+          .collection('weeklyCheckins')
+          .orderBy('weekStart', 'desc')
+          .onSnapshot((snapshot) => {
+            setWeeklyCheckins(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
         return () => {
           unsubFeedback();
           unsubFlags();
           unsubAssignments();
+          unsubCheckins();
         };
       }, [selectedMentee?.id]);
 
@@ -10286,6 +10855,61 @@
           return true;
         } catch (err) {
           console.error('Failed to delete assignment:', err);
+          return false;
+        }
+      };
+
+      // Create weekly check-in
+      const createCheckin = async (checkinData) => {
+        if (!selectedMentee?.id) return false;
+
+        try {
+          // Check if checkin for this week already exists
+          const existingCheckin = weeklyCheckins.find(c => c.weekStart === checkinData.weekStart);
+          
+          if (existingCheckin) {
+            // Update existing
+            await db.collection('users')
+              .doc(selectedMentee.id)
+              .collection('weeklyCheckins')
+              .doc(existingCheckin.id)
+              .update({
+                ...checkinData,
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+          } else {
+            // Create new
+            await db.collection('users')
+              .doc(selectedMentee.id)
+              .collection('weeklyCheckins')
+              .add({
+                ...checkinData,
+                mentorId: userProfile.uid,
+                mentorName: userProfile.displayName,
+                createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+          }
+          return true;
+        } catch (err) {
+          console.error('Failed to create check-in:', err);
+          return false;
+        }
+      };
+
+      // Delete weekly check-in
+      const deleteCheckin = async (checkinId) => {
+        if (!selectedMentee?.id) return false;
+
+        try {
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('weeklyCheckins')
+            .doc(checkinId)
+            .delete();
+          return true;
+        } catch (err) {
+          console.error('Failed to delete check-in:', err);
           return false;
         }
       };
@@ -10613,6 +11237,17 @@
                 isMobile={isMobile}
               />
             );
+          case 'checkins':
+            return (
+              <MentorCheckinsTab
+                checkins={weeklyCheckins}
+                menteeData={menteeData}
+                selectedMentee={selectedMentee}
+                onCreateCheckin={createCheckin}
+                onDeleteCheckin={deleteCheckin}
+                isMobile={isMobile}
+              />
+            );
           default:
             return null;
         }
@@ -10911,6 +11546,9 @@
       
       // Assignments state for mentees
       const [myAssignments, setMyAssignments] = useState([]);
+      
+      // Check-ins state for mentees
+      const [myCheckins, setMyCheckins] = useState([]);
 
       // Listen for auth state changes
       useEffect(() => {
@@ -10933,12 +11571,13 @@
         return () => unsubscribe();
       }, []);
 
-      // Load feedback and assignments for mentees (users with a mentor)
+      // Load feedback, assignments, and check-ins for mentees (users with a mentor)
       useEffect(() => {
         if (!user || !userProfile?.mentorId) {
           setMyTradeFeedback([]);
           setMyTradeFlags([]);
           setMyAssignments([]);
+          setMyCheckins([]);
           return;
         }
 
@@ -10968,10 +11607,20 @@
             setMyAssignments(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           });
 
+        // Subscribe to weekly check-ins
+        const unsubCheckins = db.collection('users')
+          .doc(user.uid)
+          .collection('weeklyCheckins')
+          .orderBy('weekStart', 'desc')
+          .onSnapshot((snapshot) => {
+            setMyCheckins(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
         return () => {
           unsubFeedback();
           unsubFlags();
           unsubAssignments();
+          unsubCheckins();
         };
       }, [user, userProfile?.mentorId]);
 
@@ -11229,11 +11878,14 @@
       const getNavItems = () => {
         let items = [...NAV_ITEMS];
         
-        // Add Assignments for mentees (users with a mentor)
+        // Add Assignments and Check-ins for mentees (users with a mentor)
         if (userProfile?.mentorId) {
           // Insert after Goals
           const goalsIndex = items.findIndex(i => i.id === 'goals');
-          items.splice(goalsIndex + 1, 0, { id: 'assignments', label: 'Assignments', icon: 'assignments' });
+          items.splice(goalsIndex + 1, 0, 
+            { id: 'assignments', label: 'Assignments', icon: 'assignments' },
+            { id: 'checkins', label: 'Check-ins', icon: 'checkins' }
+          );
         }
         
         // Add Mentees for mentors
@@ -11262,6 +11914,8 @@
             return <>{inviteBanner}<GoalsPage state={journalState} setState={saveJournalState} isMobile={isMobile} /></>;
           case 'assignments':
             return <>{inviteBanner}<AssignmentsPage assignments={myAssignments} journalState={journalState} userProfile={userProfile} isMobile={isMobile} onUpdateAssignment={updateMyAssignment} /></>;
+          case 'checkins':
+            return <>{inviteBanner}<CheckinsPage checkins={myCheckins} userProfile={userProfile} isMobile={isMobile} /></>;
           case 'setups':
             return <>{inviteBanner}<SetupsPage state={journalState} setState={saveJournalState} isMobile={isMobile} /></>;
           case 'mistakes':
