@@ -10506,6 +10506,11 @@
       const [activeJournalTab, setActiveJournalTab] = useState('dashboard');
       const [selectedDate, setSelectedDate] = useState(todayISO());
       
+      // Mentor dashboard state
+      const [dashboardView, setDashboardView] = useState('dashboard'); // 'dashboard' or 'list'
+      const [allMenteeData, setAllMenteeData] = useState({}); // { menteeId: { trades, assignments, checkins } }
+      const [loadingDashboard, setLoadingDashboard] = useState(true);
+      
       // Feedback state
       const [tradeFeedback, setTradeFeedback] = useState([]);
       const [tradeFlags, setTradeFlags] = useState([]);
@@ -10547,6 +10552,73 @@
 
         return () => unsubscribe();
       }, [userProfile?.uid]);
+
+      // Load all mentee data for dashboard view
+      useEffect(() => {
+        if (mentees.length === 0) {
+          setLoadingDashboard(false);
+          return;
+        }
+
+        const unsubscribers = [];
+
+        mentees.forEach(mentee => {
+          // Subscribe to each mentee's journal data
+          const unsubJournal = db.collection('users')
+            .doc(mentee.id)
+            .collection('journalData')
+            .doc('state')
+            .onSnapshot((doc) => {
+              if (doc.exists) {
+                setAllMenteeData(prev => ({
+                  ...prev,
+                  [mentee.id]: {
+                    ...prev[mentee.id],
+                    trades: doc.data().trades || [],
+                  }
+                }));
+              }
+            });
+          unsubscribers.push(unsubJournal);
+
+          // Subscribe to assignments
+          const unsubAssignments = db.collection('users')
+            .doc(mentee.id)
+            .collection('assignments')
+            .onSnapshot((snapshot) => {
+              setAllMenteeData(prev => ({
+                ...prev,
+                [mentee.id]: {
+                  ...prev[mentee.id],
+                  assignments: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                }
+              }));
+            });
+          unsubscribers.push(unsubAssignments);
+
+          // Subscribe to check-ins
+          const unsubCheckins = db.collection('users')
+            .doc(mentee.id)
+            .collection('weeklyCheckins')
+            .orderBy('weekStart', 'desc')
+            .onSnapshot((snapshot) => {
+              setAllMenteeData(prev => ({
+                ...prev,
+                [mentee.id]: {
+                  ...prev[mentee.id],
+                  checkins: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                }
+              }));
+            });
+          unsubscribers.push(unsubCheckins);
+        });
+
+        setLoadingDashboard(false);
+
+        return () => {
+          unsubscribers.forEach(unsub => unsub());
+        };
+      }, [mentees]);
 
       // Load feedback, assignments, and checkins when mentee selected
       useEffect(() => {
@@ -11320,117 +11392,526 @@
         );
       }
 
-      // Mentee List View
+      // Calculate dashboard data
+      const currentWeek = getWeekBounds();
+      
+      // Calculate aggregate stats and alerts
+      const dashboardData = useMemo(() => {
+        const menteesNeedingCheckin = [];
+        const menteesNeedingAttention = [];
+        const completedAssignmentsToReview = [];
+        const overdueAssignments = [];
+        const recentActivity = [];
+        
+        let totalTradesThisWeek = 0;
+        let totalPnLThisWeek = 0;
+        let totalWinsThisWeek = 0;
+        let totalClosedTradesThisWeek = 0;
+
+        mentees.forEach(mentee => {
+          const data = allMenteeData[mentee.id] || {};
+          const trades = data.trades || [];
+          const assignments = data.assignments || [];
+          const checkins = data.checkins || [];
+
+          // Check if weekly check-in is needed for current week
+          const hasCurrentWeekCheckin = checkins.some(c => c.weekStart === currentWeek.start);
+          if (!hasCurrentWeekCheckin) {
+            menteesNeedingCheckin.push({
+              ...mentee,
+              weekStats: calculateWeekStats(trades, currentWeek.start, currentWeek.end),
+            });
+          }
+
+          // Calculate this week's stats for this mentee
+          const weekStats = calculateWeekStats(trades, currentWeek.start, currentWeek.end);
+          totalTradesThisWeek += weekStats.totalTrades;
+          totalPnLThisWeek += weekStats.totalPnL;
+          
+          // Count wins for average win rate calculation
+          const weekTrades = trades.filter(t => {
+            const date = t.exitDate || t.entryDate;
+            return date >= currentWeek.start && date <= currentWeek.end;
+          }).map(t => ({ ...t, derived: calcTradeDerived(t) }));
+          const closedWeekTrades = weekTrades.filter(t => !t.derived.isOpen);
+          totalClosedTradesThisWeek += closedWeekTrades.length;
+          totalWinsThisWeek += closedWeekTrades.filter(t => t.derived.winLoss === 'W').length;
+
+          // Check for red days (2+ losing days this week)
+          const dailyPnL = {};
+          closedWeekTrades.forEach(t => {
+            const date = t.exitDate || t.entryDate;
+            dailyPnL[date] = (dailyPnL[date] || 0) + (t.derived.pnlFinal || 0);
+          });
+          const redDays = Object.values(dailyPnL).filter(pnl => pnl < 0).length;
+          if (redDays >= 2) {
+            menteesNeedingAttention.push({
+              type: 'red_days',
+              mentee,
+              count: redDays,
+              message: `had ${redDays} red days this week`,
+            });
+          }
+
+          // Check for overdue assignments
+          const today = todayISO();
+          assignments.forEach(a => {
+            if (a.dueDate && a.dueDate < today && ['assigned', 'in_progress'].includes(a.status)) {
+              overdueAssignments.push({
+                mentee,
+                assignment: a,
+              });
+            }
+            
+            // Check for completed assignments awaiting review
+            if (a.status === 'completed' && !a.mentorReview) {
+              completedAssignmentsToReview.push({
+                mentee,
+                assignment: a,
+              });
+            }
+
+            // Add to recent activity
+            if (a.completedAt) {
+              recentActivity.push({
+                type: 'assignment_completed',
+                mentee,
+                assignment: a,
+                timestamp: a.completedAt?.toDate?.() || new Date(),
+                message: `completed "${a.title}"`,
+              });
+            }
+          });
+
+          // Check if mentee hasn't traded in 5+ days
+          if (trades.length > 0) {
+            const sortedTrades = [...trades].sort((a, b) => 
+              (b.exitDate || b.entryDate).localeCompare(a.exitDate || a.entryDate)
+            );
+            const lastTradeDate = sortedTrades[0]?.exitDate || sortedTrades[0]?.entryDate;
+            if (lastTradeDate) {
+              const daysSinceLastTrade = Math.floor((new Date() - new Date(lastTradeDate)) / (1000 * 60 * 60 * 24));
+              if (daysSinceLastTrade >= 5) {
+                menteesNeedingAttention.push({
+                  type: 'inactive',
+                  mentee,
+                  days: daysSinceLastTrade,
+                  message: `hasn't traded in ${daysSinceLastTrade} days`,
+                });
+              }
+            }
+          }
+        });
+
+        // Add overdue assignments to attention
+        overdueAssignments.forEach(({ mentee, assignment }) => {
+          menteesNeedingAttention.push({
+            type: 'overdue',
+            mentee,
+            assignment,
+            message: `has overdue assignment "${assignment.title}"`,
+          });
+        });
+
+        // Sort recent activity by timestamp
+        recentActivity.sort((a, b) => b.timestamp - a.timestamp);
+
+        const avgWinRate = totalClosedTradesThisWeek > 0 
+          ? (totalWinsThisWeek / totalClosedTradesThisWeek) * 100 
+          : 0;
+
+        return {
+          menteesNeedingCheckin,
+          menteesNeedingAttention,
+          completedAssignmentsToReview,
+          recentActivity: recentActivity.slice(0, 10),
+          totalTradesThisWeek,
+          totalPnLThisWeek,
+          avgWinRate,
+        };
+      }, [mentees, allMenteeData, currentWeek]);
+
+      // Helper to get mentee status
+      const getMenteeStatus = (menteeId) => {
+        const data = allMenteeData[menteeId] || {};
+        const trades = data.trades || [];
+        const weekStats = calculateWeekStats(trades, currentWeek.start, currentWeek.end);
+        
+        if (weekStats.totalTrades === 0) return { color: 'gray', label: 'No trades' };
+        if (weekStats.totalPnL > 0 || weekStats.winRate > 55) return { color: 'green', label: 'On Track' };
+        if (weekStats.totalPnL >= -50 && weekStats.winRate >= 45) return { color: 'yellow', label: 'Break-even' };
+        return { color: 'red', label: 'Struggling' };
+      };
+
+      // Mentee List/Dashboard View
       return (
         <div className="space-y-6">
-          {/* Header */}
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">My Mentees</h1>
-            <p className="text-sm text-gray-500 mt-1">Manage and view your mentees' trading journals</p>
-          </div>
-
-          {/* Invite Section */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-            <h2 className="font-semibold text-gray-900 mb-4">Invite a Trader</h2>
-            
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
-                {error}
-              </div>
-            )}
-            
-            {success && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm">
-                {success}
-              </div>
-            )}
-
-            <form onSubmit={handleInvite} className="flex gap-3">
-              <input
-                type="email"
-                value={inviteEmail}
-                onChange={(e) => setInviteEmail(e.target.value)}
-                placeholder="Enter trader's email"
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                required
-              />
-              <button
-                type="submit"
-                disabled={inviting}
-                className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
-              >
-                {inviting ? 'Sending...' : 'Send Invite'}
-              </button>
-            </form>
-          </div>
-
-          {/* Mentees List */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h2 className="font-semibold text-gray-900">Your Mentees ({mentees.length})</h2>
+          {/* Header with View Toggle */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {dashboardView === 'dashboard' ? 'Mentor Dashboard' : 'My Mentees'}
+              </h1>
+              <p className="text-sm text-gray-500 mt-1">
+                {mentees.length} mentee{mentees.length !== 1 ? 's' : ''} • Week of {formatWeekRange(currentWeek.start, currentWeek.end)}
+              </p>
             </div>
+            <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
+              <button
+                onClick={() => setDashboardView('dashboard')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  dashboardView === 'dashboard' 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                Dashboard
+              </button>
+              <button
+                onClick={() => setDashboardView('list')}
+                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                  dashboardView === 'list' 
+                    ? 'bg-white text-gray-900 shadow-sm' 
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                List View
+              </button>
+            </div>
+          </div>
 
-            {loading ? (
-              <div className="p-8 text-center text-gray-500">Loading...</div>
-            ) : mentees.length === 0 ? (
-              <div className="p-12 text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
-                  👥
+          {dashboardView === 'dashboard' ? (
+            <>
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                  <p className="text-sm text-gray-500">Mentees</p>
+                  <p className="text-2xl font-bold text-gray-900">{mentees.length}</p>
                 </div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No mentees yet</h3>
-                <p className="text-gray-500">Invite traders to start mentoring them</p>
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                  <p className="text-sm text-gray-500">Week P&L</p>
+                  <p className={`text-2xl font-bold ${dashboardData.totalPnLThisWeek >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                    {formatCurrency(dashboardData.totalPnLThisWeek)}
+                  </p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                  <p className="text-sm text-gray-500">Avg Win Rate</p>
+                  <p className="text-2xl font-bold text-blue-600">{dashboardData.avgWinRate.toFixed(0)}%</p>
+                </div>
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
+                  <p className="text-sm text-gray-500">Need Attention</p>
+                  <p className="text-2xl font-bold text-orange-600">{dashboardData.menteesNeedingAttention.length}</p>
+                </div>
               </div>
-            ) : (
-              <div className="divide-y divide-gray-200">
-                {mentees.map(mentee => {
-                  const isActive = mentee.status === 'active';
-                  return (
-                    <div key={mentee.id} className="px-6 py-4 hover:bg-gray-50">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-4">
-                          <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold text-blue-600">
+
+              {/* Weekly Check-in Alerts */}
+              {dashboardData.menteesNeedingCheckin.length > 0 && (
+                <div className="bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl p-4 text-white">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-xl">📅</span>
+                    <h2 className="font-semibold">Weekly Check-ins Due</h2>
+                    <span className="ml-auto bg-white/20 px-2 py-0.5 rounded-full text-sm">
+                      {dashboardData.menteesNeedingCheckin.length} pending
+                    </span>
+                  </div>
+                  <div className="space-y-2">
+                    {dashboardData.menteesNeedingCheckin.map(mentee => (
+                      <div 
+                        key={mentee.id}
+                        className="bg-white/10 rounded-lg p-3 flex items-center justify-between"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">
                             {mentee.displayName?.charAt(0)?.toUpperCase() || '?'}
                           </div>
                           <div>
-                            <h3 className="font-medium text-gray-900">{mentee.displayName}</h3>
-                            <p className="text-sm text-gray-500">{mentee.email}</p>
+                            <p className="font-medium">{mentee.displayName}</p>
+                            <p className="text-sm text-blue-100">
+                              {mentee.weekStats?.totalTrades || 0} trades • {formatCurrency(mentee.weekStats?.totalPnL || 0)}
+                            </p>
                           </div>
-                          <span className={`px-2 py-1 text-xs rounded-full font-medium ${
-                            isActive 
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-yellow-100 text-yellow-700'
-                          }`}>
-                            {isActive ? 'Active' : 'Pending'}
-                          </span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          {isActive && (
-                            <button
-                              onClick={() => loadMenteeData(mentee)}
-                              className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2"
-                            >
-                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
-                                <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
-                                <circle cx="12" cy="12" r="3" />
-                              </svg>
-                              View Journal
-                            </button>
-                          )}
-                          <button
-                            onClick={() => removeMentee(mentee.id)}
-                            className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                            title="Remove mentee"
-                          >
-                            {Icons.trash}
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => {
+                            loadMenteeData(mentee);
+                            setActiveJournalTab('checkins');
+                          }}
+                          className="px-3 py-1.5 bg-white text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50"
+                        >
+                          Write Check-in
+                        </button>
                       </div>
-                    </div>
-                  );
-                })}
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Assignments to Review */}
+              {dashboardData.completedAssignmentsToReview.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                    <span className="text-lg">✅</span>
+                    <h2 className="font-semibold text-gray-900">Assignments to Review</h2>
+                    <span className="ml-auto bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-sm font-medium">
+                      {dashboardData.completedAssignmentsToReview.length}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {dashboardData.completedAssignmentsToReview.map(({ mentee, assignment }) => (
+                      <div key={assignment.id} className="px-6 py-3 flex items-center justify-between hover:bg-gray-50">
+                        <div>
+                          <p className="font-medium text-gray-900">{assignment.title}</p>
+                          <p className="text-sm text-gray-500">Completed by {mentee.displayName}</p>
+                        </div>
+                        <button
+                          onClick={() => {
+                            loadMenteeData(mentee);
+                            setActiveJournalTab('assignments');
+                          }}
+                          className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
+                        >
+                          Review
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Needs Attention */}
+              {dashboardData.menteesNeedingAttention.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                    <span className="text-lg">⚠️</span>
+                    <h2 className="font-semibold text-gray-900">Needs Attention</h2>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {dashboardData.menteesNeedingAttention.map((alert, idx) => (
+                      <div key={idx} className="px-6 py-3 flex items-center justify-between hover:bg-gray-50">
+                        <div className="flex items-center gap-3">
+                          <span className={`text-lg ${
+                            alert.type === 'red_days' ? '🔴' : 
+                            alert.type === 'overdue' ? '📋' : '💤'
+                          }`}>
+                            {alert.type === 'red_days' ? '🔴' : alert.type === 'overdue' ? '📋' : '💤'}
+                          </span>
+                          <div>
+                            <p className="font-medium text-gray-900">{alert.mentee.displayName}</p>
+                            <p className="text-sm text-gray-500">{alert.message}</p>
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => loadMenteeData(alert.mentee)}
+                          className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
+                        >
+                          View
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Mentee Performance Table */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="font-semibold text-gray-900">📊 Mentee Performance This Week</h2>
+                </div>
+                {mentees.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">No mentees yet</div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mentee</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Trades</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Win Rate</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">P&L</th>
+                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Status</th>
+                          <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {mentees.filter(m => m.status === 'active').map(mentee => {
+                          const data = allMenteeData[mentee.id] || {};
+                          const weekStats = calculateWeekStats(data.trades || [], currentWeek.start, currentWeek.end);
+                          const status = getMenteeStatus(mentee.id);
+                          
+                          return (
+                            <tr key={mentee.id} className="hover:bg-gray-50">
+                              <td className="px-6 py-4">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold text-blue-600">
+                                    {mentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                                  </div>
+                                  <span className="font-medium text-gray-900">{mentee.displayName}</span>
+                                </div>
+                              </td>
+                              <td className="px-6 py-4 text-center text-gray-900">{weekStats.totalTrades}</td>
+                              <td className="px-6 py-4 text-center text-gray-900">{weekStats.winRate.toFixed(0)}%</td>
+                              <td className={`px-6 py-4 text-center font-medium ${weekStats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                {formatCurrency(weekStats.totalPnL)}
+                              </td>
+                              <td className="px-6 py-4 text-center">
+                                <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                                  status.color === 'green' ? 'bg-emerald-100 text-emerald-700' :
+                                  status.color === 'yellow' ? 'bg-yellow-100 text-yellow-700' :
+                                  status.color === 'red' ? 'bg-red-100 text-red-700' :
+                                  'bg-gray-100 text-gray-600'
+                                }`}>
+                                  <span>{status.color === 'green' ? '🟢' : status.color === 'yellow' ? '🟡' : status.color === 'red' ? '🔴' : '⚪'}</span>
+                                  {status.label}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4 text-right">
+                                <button
+                                  onClick={() => loadMenteeData(mentee)}
+                                  className="text-blue-600 hover:text-blue-700 font-medium text-sm"
+                                >
+                                  View →
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+
+              {/* Recent Activity */}
+              {dashboardData.recentActivity.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200">
+                    <h2 className="font-semibold text-gray-900">📝 Recent Activity</h2>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {dashboardData.recentActivity.map((activity, idx) => (
+                      <div key={idx} className="px-6 py-3 flex items-center gap-3">
+                        <span className="text-lg">
+                          {activity.type === 'assignment_completed' ? '✅' : '📌'}
+                        </span>
+                        <div className="flex-1">
+                          <span className="font-medium text-gray-900">{activity.mentee.displayName}</span>
+                          <span className="text-gray-600"> {activity.message}</span>
+                        </div>
+                        <span className="text-sm text-gray-400">
+                          {activity.timestamp.toLocaleDateString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
+            <>
+              {/* Invite Section */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+                <h2 className="font-semibold text-gray-900 mb-4">Invite a Trader</h2>
+                
+                {error && (
+                  <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+                    {error}
+                  </div>
+                )}
+                
+                {success && (
+                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-600 text-sm">
+                    {success}
+                  </div>
+                )}
+
+                <form onSubmit={handleInvite} className="flex gap-3">
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="Enter trader's email"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    required
+                  />
+                  <button
+                    type="submit"
+                    disabled={inviting}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {inviting ? 'Sending...' : 'Send Invite'}
+                  </button>
+                </form>
+              </div>
+
+              {/* Mentees List */}
+              <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div className="px-6 py-4 border-b border-gray-200">
+                  <h2 className="font-semibold text-gray-900">Your Mentees ({mentees.length})</h2>
+                </div>
+
+                {loading ? (
+                  <div className="p-8 text-center text-gray-500">Loading...</div>
+                ) : mentees.length === 0 ? (
+                  <div className="p-12 text-center">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
+                      👥
+                    </div>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No mentees yet</h3>
+                    <p className="text-gray-500">Invite traders to start mentoring them</p>
+                  </div>
+                ) : (
+                  <div className="divide-y divide-gray-200">
+                    {mentees.map(mentee => {
+                      const isActive = mentee.status === 'active';
+                      return (
+                        <div key={mentee.id} className="px-6 py-4 hover:bg-gray-50">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold text-blue-600">
+                                {mentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                              </div>
+                              <div>
+                                <h3 className="font-medium text-gray-900">{mentee.displayName}</h3>
+                                <p className="text-sm text-gray-500">{mentee.email}</p>
+                              </div>
+                              <span className={`px-2 py-1 text-xs rounded-full font-medium ${
+                                isActive 
+                                  ? 'bg-green-100 text-green-700' 
+                                  : 'bg-yellow-100 text-yellow-700'
+                              }`}>
+                                {isActive ? 'Active' : 'Pending'}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {isActive && (
+                                <button
+                                  onClick={() => loadMenteeData(mentee)}
+                                  className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2"
+                                >
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
+                                    <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7z" />
+                                    <circle cx="12" cy="12" r="3" />
+                                  </svg>
+                                  View Journal
+                                </button>
+                              )}
+                              <button
+                                onClick={() => removeMentee(mentee.id)}
+                                className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
+                                title="Remove mentee"
+                              >
+                                {Icons.trash}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       );
     }
