@@ -3370,6 +3370,12 @@
       myTradeFeedback = [],
       myTradeFlags = [],
       markFeedbackAsRead,
+      // Trade Questions (mentee asks, mentor answers)
+      tradeQuestions = [],
+      onAskQuestion,
+      onAnswerQuestion,
+      onResolveQuestion,
+      userProfile,
     }) {
       const [modalOpen, setModalOpen] = useState(false);
       const [editingTrade, setEditingTrade] = useState(null);
@@ -3388,9 +3394,22 @@
       const [submittingFeedback, setSubmittingFeedback] = useState(false);
       const [showFlagMenu, setShowFlagMenu] = useState(false);
 
+      // Question form state (for mentee)
+      const [showQuestionForm, setShowQuestionForm] = useState(false);
+      const [questionType, setQuestionType] = useState('general');
+      const [questionContent, setQuestionContent] = useState('');
+      const [submittingQuestion, setSubmittingQuestion] = useState(false);
+      
+      // Answer form state (for mentor)
+      const [answerContent, setAnswerContent] = useState('');
+      const [submittingAnswer, setSubmittingAnswer] = useState(false);
+
       // Get feedback for the current context (mentor view vs mentee view)
       const activeFeedback = isMentorView ? tradeFeedback : myTradeFeedback;
       const activeFlags = isMentorView ? tradeFlags : myTradeFlags;
+
+      // Get questions for a specific trade
+      const getTradeQuestions = (tradeId) => tradeQuestions.filter(q => q.tradeId === tradeId);
 
       // Get feedback for a specific trade
       const getTradeFeedback = (tradeId) => activeFeedback.filter(f => f.tradeId === tradeId);
@@ -4228,13 +4247,16 @@
                           )}
                         </td>
                         {/* Feedback Column */}
-                        {(isReadOnly || activeFeedback.length > 0 || activeFlags.length > 0) && (
+                        {(isReadOnly || activeFeedback.length > 0 || activeFlags.length > 0 || tradeQuestions.length > 0) && (
                           <td className="px-4 py-3 text-center whitespace-nowrap">
                             {(() => {
                               const feedback = getTradeFeedback(trade.id);
                               const flag = getTradeFlag(trade.id);
-                              const hasContent = feedback.length > 0 || flag;
+                              const questions = getTradeQuestions(trade.id);
+                              const hasContent = feedback.length > 0 || flag || questions.length > 0;
                               const hasUnread = feedback.some(f => !f.read);
+                              const hasUnanswered = questions.some(q => q.status === 'asked');
+                              const hasAnswered = questions.some(q => q.status === 'answered' && !isMentorView);
                               
                               if (!hasContent) {
                                 return <span className="text-gray-300">-</span>;
@@ -4249,6 +4271,21 @@
                                       title={`${FLAG_TYPES[flag.flagType]?.label || 'Flagged'}${flag.status === 'resolved' ? ' (Resolved)' : ''}`}
                                     >
                                       {FLAG_TYPES[flag.flagType]?.icon || '🚩'}
+                                    </span>
+                                  )}
+                                  {/* Question indicator */}
+                                  {questions.length > 0 && (
+                                    <span 
+                                      className={`text-sm relative ${hasUnanswered ? 'animate-pulse' : ''}`}
+                                      title={`${questions.length} question(s)${hasUnanswered ? ' - awaiting answer' : ''}`}
+                                    >
+                                      ❓
+                                      {hasUnanswered && (
+                                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-orange-500 rounded-full"></span>
+                                      )}
+                                      {hasAnswered && (
+                                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-green-500 rounded-full"></span>
+                                      )}
                                     </span>
                                   )}
                                   {/* Feedback icons */}
@@ -4607,6 +4644,205 @@
                         </div>
                       )}
                     </div>
+
+                    {/* Trade Questions Section */}
+                    <div className="border-t border-gray-200 pt-4">
+                      <p className="text-sm font-medium text-gray-700 mb-3">💬 Questions & Discussion</p>
+                      
+                      {/* Existing Questions List */}
+                      {(() => {
+                        const questions = getTradeQuestions(viewingTrade.id);
+                        return questions.length > 0 ? (
+                          <div className="space-y-4 mb-4">
+                            {questions.map((q) => (
+                              <div key={q.id} className="bg-gray-50 rounded-lg p-3">
+                                {/* Question */}
+                                <div className="flex items-start gap-2 mb-2">
+                                  <span className="text-lg">❓</span>
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-2 mb-1">
+                                      <span className="text-xs font-medium text-purple-600 bg-purple-100 px-2 py-0.5 rounded">
+                                        {q.questionType === 'entry' ? 'Entry Question' :
+                                         q.questionType === 'exit' ? 'Exit Question' :
+                                         q.questionType === 'improvement' ? 'How to Improve' :
+                                         'Question'}
+                                      </span>
+                                      <span className={`text-xs px-2 py-0.5 rounded ${
+                                        q.status === 'asked' ? 'bg-orange-100 text-orange-600' :
+                                        q.status === 'answered' ? 'bg-blue-100 text-blue-600' :
+                                        'bg-green-100 text-green-600'
+                                      }`}>
+                                        {q.status === 'asked' ? '⏳ Awaiting Answer' :
+                                         q.status === 'answered' ? '💬 Answered' :
+                                         '✅ Resolved'}
+                                      </span>
+                                    </div>
+                                    <p className="text-sm text-gray-700">{q.question}</p>
+                                    <p className="text-xs text-gray-400 mt-1">
+                                      {q.menteeName || 'You'} • {q.createdAt?.toDate ? q.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                                    </p>
+                                  </div>
+                                </div>
+                                
+                                {/* Answer (if exists) */}
+                                {q.answer && (
+                                  <div className="ml-6 mt-2 pl-3 border-l-2 border-blue-300">
+                                    <div className="flex items-start gap-2">
+                                      <span className="text-lg">💡</span>
+                                      <div className="flex-1">
+                                        <p className="text-sm text-gray-700">{q.answer}</p>
+                                        <p className="text-xs text-gray-400 mt-1">
+                                          {q.mentorName || 'Mentor'} • {q.answeredAt?.toDate ? q.answeredAt.toDate().toLocaleDateString() : 'Just now'}
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
+                                
+                                {/* Answer Form (Mentor Only, if not answered) */}
+                                {isMentorView && q.status === 'asked' && onAnswerQuestion && (
+                                  <div className="ml-6 mt-3 pl-3 border-l-2 border-gray-200">
+                                    <textarea
+                                      value={answerContent}
+                                      onChange={(e) => setAnswerContent(e.target.value)}
+                                      placeholder="Write your answer..."
+                                      rows={2}
+                                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <button
+                                      onClick={async () => {
+                                        if (!answerContent.trim()) return;
+                                        setSubmittingAnswer(true);
+                                        try {
+                                          await onAnswerQuestion(q.id, answerContent.trim());
+                                          setAnswerContent('');
+                                        } catch (err) {
+                                          console.error('Error answering question:', err);
+                                        }
+                                        setSubmittingAnswer(false);
+                                      }}
+                                      disabled={!answerContent.trim() || submittingAnswer}
+                                      className="mt-2 px-4 py-1.5 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                      {submittingAnswer ? 'Sending...' : 'Send Answer'}
+                                    </button>
+                                  </div>
+                                )}
+                                
+                                {/* Resolve Button (Both can resolve after answered) */}
+                                {q.status === 'answered' && onResolveQuestion && (
+                                  <div className="ml-6 mt-2">
+                                    <button
+                                      onClick={() => onResolveQuestion(q.id)}
+                                      className="text-xs text-green-600 hover:text-green-700 font-medium"
+                                    >
+                                      ✓ Mark as Resolved
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-400 mb-4">No questions yet</p>
+                        );
+                      })()}
+
+                      {/* Ask Question Form (Mentee Only - when they have a mentor) */}
+                      {!isMentorView && userProfile?.mentorId && onAskQuestion && (
+                        <>
+                          {!showQuestionForm ? (
+                            <button
+                              onClick={() => setShowQuestionForm(true)}
+                              className="flex items-center gap-2 text-purple-600 hover:text-purple-700 font-medium text-sm"
+                            >
+                              <span>❓</span>
+                              <span>Ask Mentor a Question</span>
+                            </button>
+                          ) : (
+                            <div className="bg-purple-50 rounded-lg p-4">
+                              <p className="text-sm font-medium text-purple-700 mb-3">Ask Your Mentor</p>
+                              
+                              {/* Question Type */}
+                              <div className="mb-3">
+                                <label className="block text-xs text-gray-500 mb-1">Question Type</label>
+                                <div className="flex flex-wrap gap-2">
+                                  {[
+                                    { key: 'entry', label: 'Entry', icon: '📈' },
+                                    { key: 'exit', label: 'Exit', icon: '📉' },
+                                    { key: 'improvement', label: 'How to Improve', icon: '🎯' },
+                                    { key: 'general', label: 'General', icon: '💬' },
+                                  ].map(({ key, label, icon }) => (
+                                    <button
+                                      key={key}
+                                      onClick={() => setQuestionType(key)}
+                                      className={`flex items-center gap-1 px-2 py-1 rounded text-sm border transition-colors ${
+                                        questionType === key 
+                                          ? 'bg-purple-100 text-purple-700 border-purple-300' 
+                                          : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+                                      }`}
+                                    >
+                                      <span>{icon}</span>
+                                      <span>{label}</span>
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Question Content */}
+                              <div className="mb-3">
+                                <textarea
+                                  value={questionContent}
+                                  onChange={(e) => setQuestionContent(e.target.value)}
+                                  placeholder={
+                                    questionType === 'entry' ? "Was this a good entry? What could I have done better?" :
+                                    questionType === 'exit' ? "Should I have held longer? Exited earlier?" :
+                                    questionType === 'improvement' ? "How can I improve on trades like this?" :
+                                    "Ask your mentor anything about this trade..."
+                                  }
+                                  rows={3}
+                                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                                />
+                              </div>
+
+                              {/* Buttons */}
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    setShowQuestionForm(false);
+                                    setQuestionContent('');
+                                    setQuestionType('general');
+                                  }}
+                                  className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg text-sm"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (!questionContent.trim()) return;
+                                    setSubmittingQuestion(true);
+                                    try {
+                                      const success = await onAskQuestion(viewingTrade.id, questionType, questionContent.trim());
+                                      if (success) {
+                                        setQuestionContent('');
+                                        setQuestionType('general');
+                                        setShowQuestionForm(false);
+                                      }
+                                    } catch (err) {
+                                      console.error('Error asking question:', err);
+                                    }
+                                    setSubmittingQuestion(false);
+                                  }}
+                                  disabled={!questionContent.trim() || submittingQuestion}
+                                  className="flex-1 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 disabled:opacity-50"
+                                >
+                                  {submittingQuestion ? 'Sending...' : 'Send Question'}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </>
+                      )}
                   </div>
                 </div>
               </div>
@@ -11082,47 +11318,21 @@
                         className="flex items-center gap-2 text-blue-600 hover:text-blue-700 font-medium"
                       >
                         {showAssignmentForm ? Icons.minus : Icons.plus}
-                        <span>{showAssignmentForm ? 'Cancel Assignment' : 'Add Homework or Challenge'}</span>
+                        <span>{showAssignmentForm ? 'Cancel Assignment' : 'Add Homework Assignment'}</span>
                       </button>
 
                       {showAssignmentForm && (
                         <div className="mt-4 p-4 bg-blue-50 rounded-lg space-y-4">
-                          <h4 className="font-medium text-gray-900">📝 New Assignment</h4>
+                          <h4 className="font-medium text-gray-900">📝 New Homework Assignment</h4>
                           
-                          {/* Assignment Type */}
-                          <div className="flex gap-4">
-                            <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="assignmentType"
-                                value="homework"
-                                checked={assignmentData.type === 'homework'}
-                                onChange={(e) => setAssignmentData({ ...assignmentData, type: e.target.value, hasChallenge: false })}
-                                className="text-blue-600"
-                              />
-                              <span className="text-sm">📚 Homework</span>
-                            </label>
-                            <label className="flex items-center gap-2">
-                              <input
-                                type="radio"
-                                name="assignmentType"
-                                value="challenge"
-                                checked={assignmentData.type === 'challenge'}
-                                onChange={(e) => setAssignmentData({ ...assignmentData, type: e.target.value, hasChallenge: true })}
-                                className="text-blue-600"
-                              />
-                              <span className="text-sm">🎯 Challenge</span>
-                            </label>
-                          </div>
-
                           {/* Title */}
                           <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Title</label>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Title *</label>
                             <input
                               type="text"
                               value={assignmentData.title}
                               onChange={(e) => setAssignmentData({ ...assignmentData, title: e.target.value })}
-                              placeholder={assignmentData.type === 'homework' ? 'e.g., Read Trading in the Zone Ch. 5' : 'e.g., Hit 60% Win Rate'}
+                              placeholder="e.g., Read Trading in the Zone Ch. 5"
                               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                             />
                           </div>
@@ -11139,22 +11349,34 @@
                             />
                           </div>
 
-                          {/* Due Date for Homework */}
-                          {assignmentData.type === 'homework' && (
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">Due Date (optional)</label>
-                              <input
-                                type="date"
-                                value={assignmentData.dueDate}
-                                onChange={(e) => setAssignmentData({ ...assignmentData, dueDate: e.target.value })}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                              />
-                            </div>
-                          )}
+                          {/* Due Date */}
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Due Date (optional)</label>
+                            <input
+                              type="date"
+                              value={assignmentData.dueDate}
+                              onChange={(e) => setAssignmentData({ ...assignmentData, dueDate: e.target.value })}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
 
-                          {/* Challenge Settings */}
-                          {assignmentData.type === 'challenge' && (
-                            <>
+                          {/* Add Challenge Toggle */}
+                          <div className="border-t border-blue-200 pt-4">
+                            <label className="flex items-center gap-3 cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={assignmentData.hasChallenge}
+                                onChange={(e) => setAssignmentData({ ...assignmentData, hasChallenge: e.target.checked })}
+                                className="w-5 h-5 text-blue-600 rounded focus:ring-blue-500"
+                              />
+                              <span className="font-medium text-gray-900">🎯 Add a Challenge</span>
+                            </label>
+                            <p className="text-xs text-gray-500 mt-1 ml-8">Track a measurable goal like profit target, win rate, etc.</p>
+                          </div>
+
+                          {/* Challenge Settings (shown when checkbox is checked) */}
+                          {assignmentData.hasChallenge && (
+                            <div className="ml-4 pl-4 border-l-2 border-blue-300 space-y-4">
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Challenge Type</label>
                                 <select
@@ -11215,7 +11437,7 @@
                                   />
                                 </div>
                               </div>
-                            </>
+                            </div>
                           )}
                         </div>
                       )}
@@ -11247,10 +11469,10 @@
                           const assignmentPayload = {
                             title: assignmentData.title.trim(),
                             description: assignmentData.description.trim(),
-                            type: assignmentData.type,
+                            type: 'homework',
                             dueDate: assignmentData.dueDate || null,
-                            hasChallenge: assignmentData.type === 'challenge',
-                            challenge: assignmentData.type === 'challenge' ? {
+                            hasChallenge: assignmentData.hasChallenge,
+                            challenge: assignmentData.hasChallenge ? {
                               type: assignmentData.challengeType,
                               target: parseFloat(assignmentData.challengeTarget) || 0,
                               tradesRequired: assignmentData.challengeTradesRequired,
@@ -11303,6 +11525,9 @@
       // Feedback state
       const [tradeFeedback, setTradeFeedback] = useState([]);
       const [tradeFlags, setTradeFlags] = useState([]);
+      
+      // Trade Questions state
+      const [tradeQuestions, setTradeQuestions] = useState([]);
       
       // Assignments state
       const [assignments, setAssignments] = useState([]);
@@ -11400,6 +11625,22 @@
               }));
             });
           unsubscribers.push(unsubCheckins);
+
+          // Subscribe to trade questions
+          const unsubQuestions = db.collection('users')
+            .doc(mentee.id)
+            .collection('tradeQuestions')
+            .orderBy('createdAt', 'desc')
+            .onSnapshot((snapshot) => {
+              setAllMenteeData(prev => ({
+                ...prev,
+                [mentee.id]: {
+                  ...prev[mentee.id],
+                  questions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
+                }
+              }));
+            });
+          unsubscribers.push(unsubQuestions);
         });
 
         setLoadingDashboard(false);
@@ -11454,11 +11695,21 @@
             setWeeklyCheckins(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           });
 
+        // Subscribe to trade questions
+        const unsubQuestions = db.collection('users')
+          .doc(selectedMentee.id)
+          .collection('tradeQuestions')
+          .orderBy('createdAt', 'desc')
+          .onSnapshot((snapshot) => {
+            setTradeQuestions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
         return () => {
           unsubFeedback();
           unsubFlags();
           unsubAssignments();
           unsubCheckins();
+          unsubQuestions();
         };
       }, [selectedMentee?.id]);
 
@@ -11566,6 +11817,49 @@
           return true;
         } catch (err) {
           console.error('Failed to toggle flag status:', err);
+          return false;
+        }
+      };
+
+      // Answer a trade question (mentor)
+      const answerQuestion = async (questionId, answer) => {
+        if (!selectedMentee?.id || !answer.trim()) return false;
+
+        try {
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('tradeQuestions')
+            .doc(questionId)
+            .update({
+              answer: answer.trim(),
+              answeredAt: firebase.firestore.FieldValue.serverTimestamp(),
+              mentorId: userProfile.uid,
+              mentorName: userProfile.displayName,
+              status: 'answered',
+            });
+          return true;
+        } catch (err) {
+          console.error('Failed to answer question:', err);
+          return false;
+        }
+      };
+
+      // Resolve a question
+      const resolveQuestion = async (questionId) => {
+        if (!selectedMentee?.id) return false;
+
+        try {
+          await db.collection('users')
+            .doc(selectedMentee.id)
+            .collection('tradeQuestions')
+            .doc(questionId)
+            .update({
+              status: 'resolved',
+              resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          return true;
+        } catch (err) {
+          console.error('Failed to resolve question:', err);
           return false;
         }
       };
@@ -12009,6 +12303,7 @@
         const menteesNeedingAttention = [];
         const completedAssignmentsToReview = [];
         const overdueAssignments = [];
+        const pendingQuestions = [];
         const recentActivity = [];
         
         let totalTradesThisWeek = 0;
@@ -12021,6 +12316,26 @@
           const trades = data.trades || [];
           const assignments = data.assignments || [];
           const checkins = data.checkins || [];
+          const questions = data.questions || [];
+
+          // Check if weekly check-in is needed for current week
+          const hasCurrentWeekCheckin = checkins.some(c => c.weekStart === currentWeek.start);
+          if (!hasCurrentWeekCheckin && mentee.status === 'active') {
+            menteesNeedingCheckin.push({
+              ...mentee,
+              weekStats: calculateWeekStats(trades, currentWeek.start, currentWeek.end),
+            });
+          }
+
+          // Check for pending questions (status === 'asked')
+          questions.forEach(q => {
+            if (q.status === 'asked') {
+              pendingQuestions.push({
+                mentee,
+                question: q,
+              });
+            }
+          });
 
           // Check if weekly check-in is needed for current week
           const hasCurrentWeekCheckin = checkins.some(c => c.weekStart === currentWeek.start);
@@ -12132,6 +12447,7 @@
           menteesNeedingCheckin,
           menteesNeedingAttention,
           completedAssignmentsToReview,
+          pendingQuestions,
           recentActivity: recentActivity.slice(0, 10),
           totalTradesThisWeek,
           totalPnLThisWeek,
@@ -12195,6 +12511,10 @@
                 onAddFlag={addFlag}
                 onRemoveFlag={removeFlag}
                 onToggleFlagStatus={toggleFlagStatus}
+                tradeQuestions={tradeQuestions}
+                onAnswerQuestion={answerQuestion}
+                onResolveQuestion={resolveQuestion}
+                userProfile={userProfile}
               />
             );
           case 'calendar':
@@ -12461,6 +12781,50 @@
                         >
                           Review
                         </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Pending Questions */}
+              {dashboardData.pendingQuestions && dashboardData.pendingQuestions.length > 0 && (
+                <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                  <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
+                    <span className="text-lg">❓</span>
+                    <h2 className="font-semibold text-gray-900">Questions Awaiting Answers</h2>
+                    <span className="ml-auto bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full text-sm font-medium">
+                      {dashboardData.pendingQuestions.length}
+                    </span>
+                  </div>
+                  <div className="divide-y divide-gray-100">
+                    {dashboardData.pendingQuestions.map(({ mentee, question }) => (
+                      <div key={question.id} className="px-6 py-3 hover:bg-gray-50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1">
+                              <p className="font-medium text-gray-900">{mentee.displayName}</p>
+                              <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">
+                                {question.questionType === 'entry' ? 'Entry' :
+                                 question.questionType === 'exit' ? 'Exit' :
+                                 question.questionType === 'improvement' ? 'Improvement' : 'General'}
+                              </span>
+                            </div>
+                            <p className="text-sm text-gray-600 line-clamp-2">"{question.question}"</p>
+                            <p className="text-xs text-gray-400 mt-1">
+                              {question.createdAt?.toDate ? question.createdAt.toDate().toLocaleDateString() : 'Recently'}
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => {
+                              loadMenteeData(mentee);
+                              setActiveJournalTab('tradelog');
+                            }}
+                            className="ml-4 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
+                          >
+                            Answer
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -12814,6 +13178,9 @@
       const [myTradeFeedback, setMyTradeFeedback] = useState([]);
       const [myTradeFlags, setMyTradeFlags] = useState([]);
       
+      // Trade Questions state for mentees
+      const [myTradeQuestions, setMyTradeQuestions] = useState([]);
+      
       // Assignments state for mentees
       const [myAssignments, setMyAssignments] = useState([]);
       
@@ -12846,6 +13213,7 @@
         if (!user || !userProfile?.mentorId) {
           setMyTradeFeedback([]);
           setMyTradeFlags([]);
+          setMyTradeQuestions([]);
           setMyAssignments([]);
           setMyCheckins([]);
           return;
@@ -12866,6 +13234,15 @@
           .collection('tradeFlags')
           .onSnapshot((snapshot) => {
             setMyTradeFlags(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+          });
+
+        // Subscribe to trade questions
+        const unsubQuestions = db.collection('users')
+          .doc(user.uid)
+          .collection('tradeQuestions')
+          .orderBy('createdAt', 'desc')
+          .onSnapshot((snapshot) => {
+            setMyTradeQuestions(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
           });
 
         // Subscribe to assignments
@@ -12889,6 +13266,7 @@
         return () => {
           unsubFeedback();
           unsubFlags();
+          unsubQuestions();
           unsubAssignments();
           unsubCheckins();
         };
@@ -12928,6 +13306,53 @@
           await batch.commit();
         } catch (err) {
           console.error('Failed to mark feedback as read:', err);
+        }
+      };
+
+      // Ask mentor a question about a trade (mentee)
+      const askQuestion = async (tradeId, questionType, question) => {
+        if (!user || !userProfile?.mentorId || !question.trim()) return false;
+
+        try {
+          await db.collection('users')
+            .doc(user.uid)
+            .collection('tradeQuestions')
+            .add({
+              tradeId,
+              menteeId: user.uid,
+              menteeName: userProfile.displayName,
+              mentorId: userProfile.mentorId,
+              questionType,
+              question: question.trim(),
+              status: 'asked',
+              answer: null,
+              answeredAt: null,
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          return true;
+        } catch (err) {
+          console.error('Failed to ask question:', err);
+          return false;
+        }
+      };
+
+      // Resolve a question (both mentor and mentee can do this after answered)
+      const resolveMyQuestion = async (questionId) => {
+        if (!user) return false;
+
+        try {
+          await db.collection('users')
+            .doc(user.uid)
+            .collection('tradeQuestions')
+            .doc(questionId)
+            .update({
+              status: 'resolved',
+              resolvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          return true;
+        } catch (err) {
+          console.error('Failed to resolve question:', err);
+          return false;
         }
       };
 
@@ -13177,7 +13602,7 @@
           case 'dashboard':
             return <>{inviteBanner}<DashboardPage state={journalState} setState={saveJournalState} setActivePage={setActivePage} setSelectedDate={setSelectedDate} isMobile={isMobile} /></>;
           case 'tradelog':
-            return <>{inviteBanner}<TradeLogPage state={journalState} setState={saveJournalState} isMobile={isMobile} myTradeFeedback={myTradeFeedback} myTradeFlags={myTradeFlags} markFeedbackAsRead={markFeedbackAsRead} /></>;
+            return <>{inviteBanner}<TradeLogPage state={journalState} setState={saveJournalState} isMobile={isMobile} myTradeFeedback={myTradeFeedback} myTradeFlags={myTradeFlags} markFeedbackAsRead={markFeedbackAsRead} tradeQuestions={myTradeQuestions} onAskQuestion={askQuestion} onResolveQuestion={resolveMyQuestion} userProfile={userProfile} /></>;
           case 'calendar':
             return <>{inviteBanner}<CalendarPage state={journalState} setState={saveJournalState} selectedDate={selectedDate} setSelectedDate={setSelectedDate} isMobile={isMobile} /></>;
           case 'goals':
