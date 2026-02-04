@@ -12572,23 +12572,57 @@
         { id: 'sessions', label: 'Sessions', icon: 'sessions' },
       ];
 
-      // Load students
+      // Load students (check both 'students' and 'mentees' collections for backwards compatibility)
       useEffect(() => {
         if (!userProfile?.uid) return;
 
-        const unsubscribe = db.collection('mentorships')
+        // Try 'mentees' collection first (legacy), then 'students'
+        const unsubscribers = [];
+        let allStudents = { mentees: [], students: [] };
+        
+        const updateStudentList = () => {
+          const combined = [...allStudents.mentees, ...allStudents.students];
+          // Remove duplicates by id
+          const unique = combined.filter((v, i, a) => a.findIndex(t => t.id === v.id) === i);
+          setStudents(unique);
+          setLoading(false);
+        };
+
+        // Listen to 'mentees' subcollection
+        const unsubMentees = db.collection('mentorships')
           .doc(userProfile.uid)
-          .collection('students')
+          .collection('mentees')
           .onSnapshot((snapshot) => {
-            const studentList = snapshot.docs.map(doc => ({
+            allStudents.mentees = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
-            setStudents(studentList);
-            setLoading(false);
+            updateStudentList();
+          }, (error) => {
+            console.log('Mentees collection not found or error:', error.message);
+            allStudents.mentees = [];
+            updateStudentList();
           });
+        unsubscribers.push(unsubMentees);
 
-        return () => unsubscribe();
+        // Listen to 'students' subcollection
+        const unsubStudents = db.collection('mentorships')
+          .doc(userProfile.uid)
+          .collection('students')
+          .onSnapshot((snapshot) => {
+            allStudents.students = snapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            }));
+            updateStudentList();
+          }, (error) => {
+            console.log('Students collection not found or error:', error.message);
+            allStudents.students = [];
+            updateStudentList();
+          });
+        unsubscribers.push(unsubStudents);
+
+        return () => unsubscribers.forEach(unsub => unsub());
       }, [userProfile?.uid]);
 
       // Load all student data for dashboard view
