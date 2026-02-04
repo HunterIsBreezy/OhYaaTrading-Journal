@@ -1409,6 +1409,17 @@
       const isEdit = trade !== null && trade.id !== undefined;
       const fileInputRef = useRef(null);
 
+      // P&L input tab: 'entry_exit' | 'direct' | 'daily_total'
+      const [pnlInputTab, setPnlInputTab] = useState(() => {
+        return localStorage.getItem('pnlInputTab') || 'entry_exit';
+      });
+
+      // Save tab preference to localStorage
+      const handleTabChange = (tab) => {
+        setPnlInputTab(tab);
+        localStorage.setItem('pnlInputTab', tab);
+      };
+
       const emptyForm = {
         entryDate: todayISO(),
         ticker: '',
@@ -1419,6 +1430,7 @@
         exitDate: '',
         exitPrice: '',
         pnlManual: '',
+        dailyTotalPnl: '',
         setupId: '',
         mistakeIds: [],
         notes: '',
@@ -1446,6 +1458,7 @@
               exitDate: trade.exitDate || '',
               exitPrice: trade.exitPrice?.toString() || '',
               pnlManual: trade.pnlManual?.toString() || '',
+              dailyTotalPnl: '',
               setupId: trade.setupId || '',
               mistakeIds: trade.mistakeIds || [],
               notes: trade.notes || '',
@@ -1490,6 +1503,34 @@
 
       // Get size label based on asset type
       const sizeLabel = ASSET_TYPES.find(a => a.id === form.assetType)?.sizeLabel || 'Shares';
+
+      // Calculate sum of other trades' P&L on the selected date (for daily total calculation)
+      const otherTradesPnlOnDate = useMemo(() => {
+        const selectedDate = form.entryDate;
+        if (!selectedDate) return 0;
+        
+        // Get all trades on the selected date except the current trade being edited
+        const otherTrades = state.trades.filter(t => {
+          if (t.entryDate !== selectedDate) return false;
+          // If editing, exclude the current trade
+          if (trade?.id && t.id === trade.id) return false;
+          return true;
+        });
+        
+        // Sum up their P&L
+        return otherTrades.reduce((sum, t) => {
+          const derived = calcTradeDerived(t);
+          return sum + (derived.pnlFinal || 0);
+        }, 0);
+      }, [form.entryDate, state.trades, trade?.id]);
+
+      // Calculate P&L from daily total input
+      const dailyTotalCalcPnl = useMemo(() => {
+        if (!form.dailyTotalPnl || form.dailyTotalPnl === '') return null;
+        const dailyTotal = parseFloat(form.dailyTotalPnl);
+        if (isNaN(dailyTotal)) return null;
+        return Math.round((dailyTotal - otherTradesPnlOnDate) * 100) / 100;
+      }, [form.dailyTotalPnl, otherTradesPnlOnDate]);
 
       // Calculate derived values live
       const liveCalc = useMemo(() => {
@@ -1712,22 +1753,39 @@
         if (!form.assetType) newErrors.assetType = 'Required';
         if (!form.positionType) newErrors.positionType = 'Required';
         
-        if (!form.positionSize) {
-          newErrors.positionSize = 'Required';
-        } else if (parseFloat(form.positionSize) <= 0) {
-          newErrors.positionSize = 'Must be > 0';
-        }
+        // Position size only required for entry/exit tab
+        if (pnlInputTab === 'entry_exit') {
+          if (!form.positionSize) {
+            newErrors.positionSize = 'Required';
+          } else if (parseFloat(form.positionSize) <= 0) {
+            newErrors.positionSize = 'Must be > 0';
+          }
 
-        if (form.entryPrice && parseFloat(form.entryPrice) < 0) {
-          newErrors.entryPrice = 'Must be >= 0';
-        }
+          if (form.entryPrice && parseFloat(form.entryPrice) < 0) {
+            newErrors.entryPrice = 'Must be >= 0';
+          }
 
-        if (form.exitPrice && parseFloat(form.exitPrice) < 0) {
-          newErrors.exitPrice = 'Must be >= 0';
-        }
+          if (form.exitPrice && parseFloat(form.exitPrice) < 0) {
+            newErrors.exitPrice = 'Must be >= 0';
+          }
 
-        if (form.exitDate && form.entryDate && form.exitDate < form.entryDate) {
-          newErrors.exitDate = 'Must be >= entry date';
+          if (form.exitDate && form.entryDate && form.exitDate < form.entryDate) {
+            newErrors.exitDate = 'Must be >= entry date';
+          }
+        }
+        
+        // Direct P&L tab validation
+        if (pnlInputTab === 'direct') {
+          if (!form.pnlManual || form.pnlManual === '') {
+            newErrors.pnlManual = 'Required';
+          }
+        }
+        
+        // Daily total tab validation
+        if (pnlInputTab === 'daily_total') {
+          if (!form.dailyTotalPnl || form.dailyTotalPnl === '') {
+            newErrors.dailyTotalPnl = 'Required';
+          }
         }
 
         setErrors(newErrors);
@@ -1739,17 +1797,27 @@
         if (!validate()) return;
 
         const now = nowISO();
+        
+        // Determine P&L based on active tab
+        let finalPnlManual = null;
+        if (pnlInputTab === 'direct' && form.pnlManual) {
+          finalPnlManual = parseFloat(form.pnlManual);
+        } else if (pnlInputTab === 'daily_total' && dailyTotalCalcPnl !== null) {
+          finalPnlManual = dailyTotalCalcPnl;
+        }
+        // For 'entry_exit' tab, pnlManual stays null and P&L is calculated from prices
+        
         const tradeData = {
           id: trade?.id || generateId(),
           entryDate: form.entryDate,
           ticker: form.ticker.toUpperCase().trim(),
           assetType: form.assetType,
           positionType: form.positionType,
-          positionSize: parseFloat(form.positionSize),
-          entryPrice: form.entryPrice ? parseFloat(form.entryPrice) : null,
-          exitDate: form.exitDate || null,
-          exitPrice: form.exitPrice ? parseFloat(form.exitPrice) : null,
-          pnlManual: form.pnlManual ? parseFloat(form.pnlManual) : null,
+          positionSize: pnlInputTab === 'entry_exit' ? parseFloat(form.positionSize) : null,
+          entryPrice: pnlInputTab === 'entry_exit' && form.entryPrice ? parseFloat(form.entryPrice) : null,
+          exitDate: pnlInputTab === 'entry_exit' && form.exitDate ? form.exitDate : null,
+          exitPrice: pnlInputTab === 'entry_exit' && form.exitPrice ? parseFloat(form.exitPrice) : null,
+          pnlManual: finalPnlManual,
           setupId: form.setupId || null,
           mistakeIds: form.mistakeIds,
           notes: form.notes,
@@ -1784,8 +1852,6 @@
       };
 
       if (!isOpen) return null;
-
-      const mismatchRing = liveCalc.pnlMismatch ? 'ring-2 ring-red-500' : '';
 
       return (
         <div className="fixed inset-0 z-50 overflow-y-auto">
@@ -1903,129 +1969,231 @@
                   </div>
                 </div>
 
-                {/* Row 3: Position Size, Entry Price */}
-                <div className="grid grid-cols-2 gap-2 md:gap-4">
-                  <div>
-                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
-                      {sizeLabel} <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="number"
-                      value={form.positionSize}
-                      onChange={(e) => handleChange('positionSize', e.target.value)}
-                      placeholder="100"
-                      step="any"
-                      min="0"
-                      className={`w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        errors.positionSize ? 'border-red-500' : 'border-gray-300'
-                      } ${mismatchRing}`}
-                    />
-                    {errors.positionSize && <p className="text-red-500 text-xs mt-1">{errors.positionSize}</p>}
-                  </div>
-
-                  <div>
-                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
-                      Entry Price
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                      <input
-                        type="number"
-                        value={form.entryPrice}
-                        onChange={(e) => handleChange('entryPrice', e.target.value)}
-                        placeholder="0.00"
-                        step="any"
-                        min="0"
-                        className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          errors.entryPrice ? 'border-red-500' : 'border-gray-300'
-                        } ${mismatchRing}`}
-                      />
-                    </div>
-                    {errors.entryPrice && <p className="text-red-500 text-xs mt-1">{errors.entryPrice}</p>}
-                  </div>
-                </div>
-
-                {/* Row 4: Exit Date, Exit Price */}
-                <div className="grid grid-cols-2 gap-2 md:gap-4">
-                  <div>
-                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
-                      Exit Date
-                    </label>
-                    <input
-                      type="date"
-                      value={form.exitDate}
-                      onChange={(e) => handleChange('exitDate', e.target.value)}
-                      min={form.entryDate}
-                      max={todayISO()}
-                      className={`w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        errors.exitDate ? 'border-red-500' : 'border-gray-300'
+                {/* P&L Input Method Tabs */}
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  {/* Tab Headers */}
+                  <div className="flex bg-gray-50 border-b border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => handleTabChange('entry_exit')}
+                      className={`flex-1 py-2.5 px-3 text-xs md:text-sm font-medium transition-colors ${
+                        pnlInputTab === 'entry_exit'
+                          ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
                       }`}
-                    />
-                    {errors.exitDate && <p className="text-red-500 text-xs mt-1">{errors.exitDate}</p>}
+                    >
+                      Entry/Exit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTabChange('direct')}
+                      className={`flex-1 py-2.5 px-3 text-xs md:text-sm font-medium transition-colors ${
+                        pnlInputTab === 'direct'
+                          ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      Trade P&L
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleTabChange('daily_total')}
+                      className={`flex-1 py-2.5 px-3 text-xs md:text-sm font-medium transition-colors ${
+                        pnlInputTab === 'daily_total'
+                          ? 'bg-white text-blue-600 border-b-2 border-blue-600 -mb-px'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      Daily Total
+                    </button>
                   </div>
 
-                  <div>
-                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
-                      Exit Price
-                    </label>
-                    <div className="relative">
-                      <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                      <input
-                        type="number"
-                        value={form.exitPrice}
-                        onChange={(e) => handleChange('exitPrice', e.target.value)}
-                        placeholder="0.00"
-                        step="any"
-                        min="0"
-                        className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                          errors.exitPrice ? 'border-red-500' : 'border-gray-300'
-                        } ${mismatchRing}`}
-                      />
-                    </div>
-                    {errors.exitPrice && <p className="text-red-500 text-xs mt-1">{errors.exitPrice}</p>}
-                  </div>
-                </div>
+                  {/* Tab Content */}
+                  <div className="p-3 md:p-4 bg-white">
+                    {/* Entry/Exit Tab */}
+                    {pnlInputTab === 'entry_exit' && (
+                      <div className="space-y-3 md:space-y-4">
+                        {/* Position Size, Entry Price */}
+                        <div className="grid grid-cols-2 gap-2 md:gap-4">
+                          <div>
+                            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+                              {sizeLabel} <span className="text-red-500">*</span>
+                            </label>
+                            <input
+                              type="number"
+                              value={form.positionSize}
+                              onChange={(e) => handleChange('positionSize', e.target.value)}
+                              placeholder="100"
+                              step="any"
+                              min="0"
+                              className={`w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                errors.positionSize ? 'border-red-500' : 'border-gray-300'
+                              }`}
+                            />
+                            {errors.positionSize && <p className="text-red-500 text-xs mt-1">{errors.positionSize}</p>}
+                          </div>
 
-                {/* Live Calculations */}
-                {(liveCalc.lengthDays !== null || liveCalc.pnlCalculated !== null) && (
-                  <div className="bg-gray-50 rounded-lg p-3 md:p-4 flex gap-4 md:gap-6">
-                    {liveCalc.lengthDays !== null && (
-                      <div>
-                        <p className="text-[10px] md:text-xs text-gray-500">Length</p>
-                        <p className="text-sm md:text-lg font-semibold text-gray-900">{liveCalc.lengthDays}d</p>
+                          <div>
+                            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+                              Entry Price
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                              <input
+                                type="number"
+                                value={form.entryPrice}
+                                onChange={(e) => handleChange('entryPrice', e.target.value)}
+                                placeholder="0.00"
+                                step="any"
+                                min="0"
+                                className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                  errors.entryPrice ? 'border-red-500' : 'border-gray-300'
+                                }`}
+                              />
+                            </div>
+                            {errors.entryPrice && <p className="text-red-500 text-xs mt-1">{errors.entryPrice}</p>}
+                          </div>
+                        </div>
+
+                        {/* Exit Date, Exit Price */}
+                        <div className="grid grid-cols-2 gap-2 md:gap-4">
+                          <div>
+                            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+                              Exit Date
+                            </label>
+                            <input
+                              type="date"
+                              value={form.exitDate}
+                              onChange={(e) => handleChange('exitDate', e.target.value)}
+                              min={form.entryDate}
+                              max={todayISO()}
+                              className={`w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                errors.exitDate ? 'border-red-500' : 'border-gray-300'
+                              }`}
+                            />
+                            {errors.exitDate && <p className="text-red-500 text-xs mt-1">{errors.exitDate}</p>}
+                          </div>
+
+                          <div>
+                            <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+                              Exit Price
+                            </label>
+                            <div className="relative">
+                              <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                              <input
+                                type="number"
+                                value={form.exitPrice}
+                                onChange={(e) => handleChange('exitPrice', e.target.value)}
+                                placeholder="0.00"
+                                step="any"
+                                min="0"
+                                className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                                  errors.exitPrice ? 'border-red-500' : 'border-gray-300'
+                                }`}
+                              />
+                            </div>
+                            {errors.exitPrice && <p className="text-red-500 text-xs mt-1">{errors.exitPrice}</p>}
+                          </div>
+                        </div>
+
+                        {/* Live Calculations */}
+                        {(liveCalc.lengthDays !== null || liveCalc.pnlCalculated !== null) && (
+                          <div className="bg-gray-50 rounded-lg p-3 md:p-4 flex gap-4 md:gap-6">
+                            {liveCalc.lengthDays !== null && (
+                              <div>
+                                <p className="text-[10px] md:text-xs text-gray-500">Length</p>
+                                <p className="text-sm md:text-lg font-semibold text-gray-900">{liveCalc.lengthDays}d</p>
+                              </div>
+                            )}
+                            {liveCalc.pnlCalculated !== null && (
+                              <div>
+                                <p className="text-[10px] md:text-xs text-gray-500">Trade P&L</p>
+                                <p className={`text-sm md:text-lg font-semibold ${liveCalc.pnlCalculated >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  {liveCalc.pnlCalculated >= 0 ? '+' : ''}{formatCurrency(liveCalc.pnlCalculated)}
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     )}
-                    {liveCalc.pnlCalculated !== null && (
+
+                    {/* Direct Trade P&L Tab */}
+                    {pnlInputTab === 'direct' && (
                       <div>
-                        <p className="text-[10px] md:text-xs text-gray-500">Calc P&L</p>
-                        <p className={`text-sm md:text-lg font-semibold ${liveCalc.pnlCalculated >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
-                          {formatCurrency(liveCalc.pnlCalculated)}
-                        </p>
+                        <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+                          Trade P&L <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                          <input
+                            type="number"
+                            value={form.pnlManual}
+                            onChange={(e) => handleChange('pnlManual', e.target.value)}
+                            placeholder="Enter profit or loss (e.g., 150 or -75)"
+                            step="any"
+                            className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-2.5 md:py-3 text-sm md:text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                              errors.pnlManual ? 'border-red-500' : 'border-gray-300'
+                            }`}
+                          />
+                        </div>
+                        {errors.pnlManual && <p className="text-red-500 text-xs mt-1">{errors.pnlManual}</p>}
+                        <p className="text-xs text-gray-500 mt-2">Enter positive for profit, negative for loss</p>
+                        
+                        {/* Show entered P&L preview */}
+                        {form.pnlManual && !isNaN(parseFloat(form.pnlManual)) && (
+                          <div className="mt-3 bg-gray-50 rounded-lg p-3 md:p-4">
+                            <p className="text-[10px] md:text-xs text-gray-500 mb-1">Trade P&L</p>
+                            <p className={`text-xl md:text-2xl font-bold ${parseFloat(form.pnlManual) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {parseFloat(form.pnlManual) >= 0 ? '+' : ''}{formatCurrency(parseFloat(form.pnlManual))}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
-                  </div>
-                )}
 
-                {/* P&L Manual Override */}
-                <div>
-                  <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
-                    Manual P&L
-                    {liveCalc.pnlMismatch && (
-                      <span className="ml-1 md:ml-2 text-red-500 text-[10px] md:text-xs">⚠ Mismatch</span>
+                    {/* Daily Total Tab */}
+                    {pnlInputTab === 'daily_total' && (
+                      <div>
+                        <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+                          Daily Total P&L <span className="text-red-500">*</span>
+                        </label>
+                        <div className="relative">
+                          <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
+                          <input
+                            type="number"
+                            value={form.dailyTotalPnl}
+                            onChange={(e) => handleChange('dailyTotalPnl', e.target.value)}
+                            placeholder="Enter your total P&L for the day"
+                            step="any"
+                            className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-2.5 md:py-3 text-sm md:text-base border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                              errors.dailyTotalPnl ? 'border-red-500' : 'border-gray-300'
+                            }`}
+                          />
+                        </div>
+                        {errors.dailyTotalPnl && <p className="text-red-500 text-xs mt-1">{errors.dailyTotalPnl}</p>}
+                        
+                        {/* Show calculation breakdown */}
+                        <div className="mt-3 bg-gray-50 rounded-lg p-3 md:p-4 space-y-2">
+                          <div className="flex justify-between text-xs md:text-sm">
+                            <span className="text-gray-500">Other trades on {form.entryDate}:</span>
+                            <span className={`font-medium ${otherTradesPnlOnDate >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                              {otherTradesPnlOnDate >= 0 ? '+' : ''}{formatCurrency(otherTradesPnlOnDate)}
+                            </span>
+                          </div>
+                          {dailyTotalCalcPnl !== null && (
+                            <>
+                              <div className="border-t border-gray-200 pt-2">
+                                <p className="text-[10px] md:text-xs text-gray-500 mb-1">This Trade's P&L</p>
+                                <p className={`text-xl md:text-2xl font-bold ${dailyTotalCalcPnl >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                                  {dailyTotalCalcPnl >= 0 ? '+' : ''}{formatCurrency(dailyTotalCalcPnl)}
+                                </p>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      </div>
                     )}
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
-                    <input
-                      type="number"
-                      value={form.pnlManual}
-                      onChange={(e) => handleChange('pnlManual', e.target.value)}
-                      placeholder="Leave empty for calculated"
-                      step="any"
-                      className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                        liveCalc.pnlMismatch ? 'border-amber-500 bg-amber-50' : 'border-gray-300'
-                      }`}
-                    />
                   </div>
                 </div>
 
