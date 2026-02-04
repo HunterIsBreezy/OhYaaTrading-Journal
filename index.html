@@ -15013,24 +15013,44 @@
 
       // Listen for auth state changes
       useEffect(() => {
-        const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+        const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
           setUser(firebaseUser);
-          
-          if (firebaseUser) {
-            // Load user profile
-            const profileDoc = await db.collection('users').doc(firebaseUser.uid).get();
-            if (profileDoc.exists) {
-              setUserProfile({ uid: firebaseUser.uid, ...profileDoc.data() });
-            }
-          } else {
+          if (!firebaseUser) {
             setUserProfile(null);
+            setAuthLoading(false);
           }
-          
-          setAuthLoading(false);
         });
 
         return () => unsubscribe();
       }, []);
+
+      // Listen for user profile changes (real-time listener to handle signup race condition)
+      useEffect(() => {
+        if (!user) {
+          setUserProfile(null);
+          return;
+        }
+
+        // Use onSnapshot for real-time updates - this will fire when the document is created during signup
+        const unsubscribe = db.collection('users').doc(user.uid).onSnapshot(
+          (doc) => {
+            if (doc.exists) {
+              setUserProfile({ uid: user.uid, ...doc.data() });
+            } else {
+              // Document doesn't exist yet (might be in the middle of signup)
+              setUserProfile(null);
+            }
+            setAuthLoading(false);
+          },
+          (error) => {
+            console.error('Error loading user profile:', error);
+            setUserProfile(null);
+            setAuthLoading(false);
+          }
+        );
+
+        return () => unsubscribe();
+      }, [user]);
 
       // Load feedback, assignments, and check-ins for students (users with a mentor)
       useEffect(() => {
