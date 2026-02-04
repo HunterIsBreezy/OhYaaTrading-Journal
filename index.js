@@ -32,6 +32,199 @@ const sendEmailViaResend = async (to, subject, html) => {
   return result;
 };
 
+// Generate 6-digit verification code
+const generateVerificationCode = () => {
+  return Math.floor(100000 + Math.random() * 900000).toString();
+};
+
+// Email verification code HTML template
+const generateVerificationEmailHtml = (userName, code) => {
+  return `
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    </head>
+    <body style="margin: 0; padding: 0; background-color: #0f172a; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #0f172a; padding: 40px 20px;">
+        <tr>
+          <td align="center">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 480px; background: linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.95) 100%); border-radius: 24px; border: 1px solid rgba(255,255,255,0.1); overflow: hidden;">
+              
+              <!-- Header with logo -->
+              <tr>
+                <td style="padding: 40px 40px 30px 40px; text-align: center;">
+                  <div style="margin-bottom: 8px;">
+                    <span style="font-size: 32px; font-weight: 800; color: #ffffff;">oh</span><span style="font-size: 32px; font-weight: 800; color: #60a5fa;">Yaaa</span>
+                  </div>
+                  <p style="color: #94a3b8; font-size: 14px; margin: 0;">Trading Journal</p>
+                </td>
+              </tr>
+              
+              <!-- Main content -->
+              <tr>
+                <td style="padding: 0 40px;">
+                  <h1 style="color: #ffffff; font-size: 24px; font-weight: 700; text-align: center; margin: 0 0 16px 0;">
+                    Verify Your Email
+                  </h1>
+                  <p style="color: #94a3b8; font-size: 16px; line-height: 1.6; text-align: center; margin: 0 0 32px 0;">
+                    Hey ${userName}! Enter this code to complete your registration:
+                  </p>
+                </td>
+              </tr>
+              
+              <!-- Verification code box -->
+              <tr>
+                <td style="padding: 0 40px;">
+                  <div style="background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%); border-radius: 16px; padding: 32px; text-align: center; margin-bottom: 32px;">
+                    <p style="color: rgba(255,255,255,0.7); font-size: 12px; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 12px 0;">Your verification code</p>
+                    <div style="font-size: 48px; font-weight: 800; letter-spacing: 12px; color: #ffffff; font-family: 'Courier New', monospace;">
+                      ${code}
+                    </div>
+                  </div>
+                </td>
+              </tr>
+              
+              <!-- Expiry notice -->
+              <tr>
+                <td style="padding: 0 40px;">
+                  <div style="background: rgba(251, 191, 36, 0.1); border: 1px solid rgba(251, 191, 36, 0.3); border-radius: 12px; padding: 16px; margin-bottom: 32px;">
+                    <p style="color: #fbbf24; font-size: 14px; margin: 0; text-align: center;">
+                      ⏱️ This code expires in <strong>10 minutes</strong>
+                    </p>
+                  </div>
+                </td>
+              </tr>
+              
+              <!-- Security note -->
+              <tr>
+                <td style="padding: 0 40px 40px 40px;">
+                  <p style="color: #64748b; font-size: 13px; line-height: 1.6; text-align: center; margin: 0;">
+                    If you didn't create an account with ohYaaa, you can safely ignore this email.
+                  </p>
+                </td>
+              </tr>
+              
+              <!-- Footer -->
+              <tr>
+                <td style="background: rgba(0,0,0,0.2); padding: 24px 40px; text-align: center; border-top: 1px solid rgba(255,255,255,0.05);">
+                  <p style="color: #475569; font-size: 12px; margin: 0;">
+                    © ${new Date().getFullYear()} ohYaaa Trading Journal. All rights reserved.
+                  </p>
+                </td>
+              </tr>
+              
+            </table>
+          </td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+};
+
+// Send verification code endpoint
+exports.sendVerificationCode = onRequest({
+  cors: true,
+}, async (req, res) => {
+  try {
+    const { email, displayName, uid } = req.body;
+
+    if (!email || !uid) {
+      return res.status(400).json({ error: "Email and UID are required" });
+    }
+
+    // Generate 6-digit code
+    const code = generateVerificationCode();
+    const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
+
+    // Store code in Firestore
+    await db.collection("verificationCodes").doc(uid).set({
+      code,
+      email,
+      expiresAt,
+      attempts: 0,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Send email
+    const html = generateVerificationEmailHtml(displayName || "there", code);
+    await sendEmailViaResend(email, "🔐 Your ohYaaa Verification Code", html);
+
+    console.log(`Verification code sent to ${email}`);
+    res.status(200).json({ success: true, message: "Verification code sent" });
+
+  } catch (error) {
+    console.error("Send verification code error:", error);
+    res.status(500).json({ error: "Failed to send verification code" });
+  }
+});
+
+// Verify code endpoint
+exports.verifyCode = onRequest({
+  cors: true,
+}, async (req, res) => {
+  try {
+    const { uid, code } = req.body;
+
+    if (!uid || !code) {
+      return res.status(400).json({ error: "UID and code are required" });
+    }
+
+    // Get stored code
+    const codeDoc = await db.collection("verificationCodes").doc(uid).get();
+
+    if (!codeDoc.exists) {
+      return res.status(400).json({ error: "No verification code found. Please request a new one." });
+    }
+
+    const codeData = codeDoc.data();
+
+    // Check if expired
+    if (Date.now() > codeData.expiresAt) {
+      await db.collection("verificationCodes").doc(uid).delete();
+      return res.status(400).json({ error: "Code has expired. Please request a new one." });
+    }
+
+    // Check attempts (max 5)
+    if (codeData.attempts >= 5) {
+      await db.collection("verificationCodes").doc(uid).delete();
+      return res.status(400).json({ error: "Too many attempts. Please request a new code." });
+    }
+
+    // Increment attempts
+    await db.collection("verificationCodes").doc(uid).update({
+      attempts: admin.firestore.FieldValue.increment(1),
+    });
+
+    // Verify code
+    if (codeData.code !== code) {
+      const remainingAttempts = 4 - codeData.attempts;
+      return res.status(400).json({ 
+        error: `Invalid code. ${remainingAttempts} attempts remaining.` 
+      });
+    }
+
+    // Code is valid! Update user document
+    await db.collection("users").doc(uid).update({
+      emailVerified: true,
+      verifiedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    // Delete the verification code
+    await db.collection("verificationCodes").doc(uid).delete();
+
+    console.log(`Email verified for user ${uid}`);
+    res.status(200).json({ success: true, message: "Email verified successfully" });
+
+  } catch (error) {
+    console.error("Verify code error:", error);
+    res.status(500).json({ error: "Failed to verify code" });
+  }
+});
+
 // Helper to calculate trade P&L
 const calcTradePnL = (trade) => {
   if (!trade.entryPrice || !trade.shares) return 0;
