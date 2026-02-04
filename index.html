@@ -20,6 +20,32 @@
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
+    .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0); }
+    .mb-safe { margin-bottom: env(safe-area-inset-bottom, 0); }
+    
+    /* Mobile bottom nav spacing */
+    @supports (padding-bottom: env(safe-area-inset-bottom)) {
+      .mobile-content-padding {
+        padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0));
+      }
+    }
+    @supports not (padding-bottom: env(safe-area-inset-bottom)) {
+      .mobile-content-padding {
+        padding-bottom: 4rem;
+      }
+    }
+    
+    /* Prevent body scroll when modal open */
+    body.modal-open {
+      overflow: hidden;
+    }
+    
+    /* Touch-friendly tap highlights */
+    @media (hover: none) {
+      button, a {
+        -webkit-tap-highlight-color: transparent;
+      }
+    }
   </style>
 </head>
 <body>
@@ -74,8 +100,8 @@
 
     // Email templates
     const emailTemplates = {
-      mentorInvite: (mentorName, menteeEmail) => ({
-        to: menteeEmail,
+      mentorInvite: (mentorName, studentEmail) => ({
+        to: studentEmail,
         subject: `${mentorName} wants to mentor you on Trading Journal`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
@@ -84,10 +110,10 @@
             </div>
             <h2 style="color: #1f2937;">You've Been Invited!</h2>
             <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
-              <strong>${mentorName}</strong> has invited you to be their mentee on Trading Journal.
+              <strong>${mentorName}</strong> has invited you to be their student on Trading Journal.
             </p>
             <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
-              As a mentee, your mentor will be able to view your trading journal to help guide your trading journey.
+              As a student, your mentor will be able to view your trading journal to help guide your trading journey.
             </p>
             <div style="text-align: center; margin: 30px 0;">
               <a href="https://ohyaatradingjournal.com" 
@@ -106,9 +132,9 @@
         `,
       }),
       
-      inviteAccepted: (mentorEmail, menteeName) => ({
+      inviteAccepted: (mentorEmail, studentName) => ({
         to: mentorEmail,
-        subject: `${menteeName} accepted your mentor invitation!`,
+        subject: `${studentName} accepted your mentor invitation!`,
         html: `
           <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
             <div style="text-align: center; margin-bottom: 30px;">
@@ -116,7 +142,7 @@
             </div>
             <h2 style="color: #1f2937;">Great News! 🎉</h2>
             <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
-              <strong>${menteeName}</strong> has accepted your mentor invitation!
+              <strong>${studentName}</strong> has accepted your mentor invitation!
             </p>
             <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
               You can now view their trading journal and help guide their trading journey.
@@ -124,7 +150,7 @@
             <div style="text-align: center; margin: 30px 0;">
               <a href="https://ohyaatradingjournal.com" 
                  style="background-color: #2563eb; color: white; padding: 12px 30px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-                View Your Mentees
+                View Your Students
               </a>
             </div>
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
@@ -573,7 +599,7 @@
           <circle cx="12" cy="7" r="4" />
         </svg>
       ),
-      mentees: (
+      students: (
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
           <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2" />
           <circle cx="9" cy="7" r="4" />
@@ -1746,11 +1772,11 @@
               </div>
 
               {/* Form */}
-              <div className="p-4 md:p-6 space-y-4 md:space-y-6">
+              <div className="p-4 md:p-6 space-y-3 md:space-y-6">
                 {/* Row 1: Entry Date, Ticker */}
-                <div className="grid grid-cols-2 gap-3 md:gap-4">
+                <div className="grid grid-cols-2 gap-2 md:gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                       Entry Date <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -1758,7 +1784,7 @@
                       value={form.entryDate}
                       onChange={(e) => handleChange('entryDate', e.target.value)}
                       max={todayISO()}
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         errors.entryDate ? 'border-red-500' : 'border-gray-300'
                       }`}
                     />
@@ -1766,7 +1792,7 @@
                   </div>
 
                   <div className="relative">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                       Ticker <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -1779,7 +1805,7 @@
                       onFocus={() => setShowTickerDropdown(true)}
                       onBlur={() => setTimeout(() => setShowTickerDropdown(false), 200)}
                       placeholder="AAPL"
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         errors.ticker ? 'border-red-500' : 'border-gray-300'
                       }`}
                     />
@@ -1805,15 +1831,15 @@
                 </div>
 
                 {/* Row 2: Asset Type, Position Type */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2 md:gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Asset Type <span className="text-red-500">*</span>
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+                      Asset <span className="text-red-500">*</span>
                     </label>
                     <select
                       value={form.assetType}
                       onChange={(e) => handleAssetTypeChange(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       {ASSET_TYPES.map(type => (
                         <option key={type.id} value={type.id}>{type.label}</option>
@@ -1822,16 +1848,16 @@
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Position Type <span className="text-red-500">*</span>
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+                      Position <span className="text-red-500">*</span>
                     </label>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1 md:gap-2">
                       {POSITION_TYPES.map(type => (
                         <button
                           key={type.id}
                           type="button"
                           onClick={() => handleChange('positionType', type.id)}
-                          className={`flex-1 py-2 px-4 rounded-lg border font-medium transition-colors ${
+                          className={`flex-1 py-1.5 md:py-2 px-2 md:px-4 rounded-lg border text-xs md:text-sm font-medium transition-colors ${
                             form.positionType === type.id
                               ? type.id === 'long' 
                                 ? 'bg-emerald-100 border-emerald-500 text-emerald-700'
@@ -1847,9 +1873,9 @@
                 </div>
 
                 {/* Row 3: Position Size, Entry Price */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2 md:gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                       {sizeLabel} <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -1859,7 +1885,7 @@
                       placeholder="100"
                       step="any"
                       min="0"
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         errors.positionSize ? 'border-red-500' : 'border-gray-300'
                       } ${mismatchRing}`}
                     />
@@ -1867,11 +1893,11 @@
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                       Entry Price
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                      <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
                       <input
                         type="number"
                         value={form.entryPrice}
@@ -1879,7 +1905,7 @@
                         placeholder="0.00"
                         step="any"
                         min="0"
-                        className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                           errors.entryPrice ? 'border-red-500' : 'border-gray-300'
                         } ${mismatchRing}`}
                       />
@@ -1889,9 +1915,9 @@
                 </div>
 
                 {/* Row 4: Exit Date, Exit Price */}
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-2 gap-2 md:gap-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                       Exit Date
                     </label>
                     <input
@@ -1900,7 +1926,7 @@
                       onChange={(e) => handleChange('exitDate', e.target.value)}
                       min={form.entryDate}
                       max={todayISO()}
-                      className={`w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         errors.exitDate ? 'border-red-500' : 'border-gray-300'
                       }`}
                     />
@@ -1908,11 +1934,11 @@
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                       Exit Price
                     </label>
                     <div className="relative">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                      <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
                       <input
                         type="number"
                         value={form.exitPrice}
@@ -1920,7 +1946,7 @@
                         placeholder="0.00"
                         step="any"
                         min="0"
-                        className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                           errors.exitPrice ? 'border-red-500' : 'border-gray-300'
                         } ${mismatchRing}`}
                       />
@@ -1931,17 +1957,17 @@
 
                 {/* Live Calculations */}
                 {(liveCalc.lengthDays !== null || liveCalc.pnlCalculated !== null) && (
-                  <div className="bg-gray-50 rounded-lg p-4 flex gap-6">
+                  <div className="bg-gray-50 rounded-lg p-3 md:p-4 flex gap-4 md:gap-6">
                     {liveCalc.lengthDays !== null && (
                       <div>
-                        <p className="text-xs text-gray-500">Length of Trade</p>
-                        <p className="text-lg font-semibold text-gray-900">{liveCalc.lengthDays} days</p>
+                        <p className="text-[10px] md:text-xs text-gray-500">Length</p>
+                        <p className="text-sm md:text-lg font-semibold text-gray-900">{liveCalc.lengthDays}d</p>
                       </div>
                     )}
                     {liveCalc.pnlCalculated !== null && (
                       <div>
-                        <p className="text-xs text-gray-500">Calculated P&L</p>
-                        <p className={`text-lg font-semibold ${liveCalc.pnlCalculated >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        <p className="text-[10px] md:text-xs text-gray-500">Calc P&L</p>
+                        <p className={`text-sm md:text-lg font-semibold ${liveCalc.pnlCalculated >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                           {formatCurrency(liveCalc.pnlCalculated)}
                         </p>
                       </div>
@@ -1951,21 +1977,21 @@
 
                 {/* P&L Manual Override */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Manual P&L Override
+                  <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
+                    Manual P&L
                     {liveCalc.pnlMismatch && (
-                      <span className="ml-2 text-red-500 text-xs">⚠ Mismatch with calculated P&L</span>
+                      <span className="ml-1 md:ml-2 text-red-500 text-[10px] md:text-xs">⚠ Mismatch</span>
                     )}
                   </label>
                   <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500">$</span>
+                    <span className="absolute left-2 md:left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">$</span>
                     <input
                       type="number"
                       value={form.pnlManual}
                       onChange={(e) => handleChange('pnlManual', e.target.value)}
-                      placeholder="Leave empty to use calculated"
+                      placeholder="Leave empty for calculated"
                       step="any"
-                      className={`w-full pl-7 pr-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                      className={`w-full pl-5 md:pl-7 pr-2 md:pr-3 py-1.5 md:py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                         liveCalc.pnlMismatch ? 'border-amber-500 bg-amber-50' : 'border-gray-300'
                       }`}
                     />
@@ -1974,13 +2000,13 @@
 
                 {/* Setup Dropdown */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                     Setup
                   </label>
                   <select
                     value={form.setupId}
                     onChange={(e) => handleChange('setupId', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="">No setup selected</option>
                     {state.setups.map(setup => (
@@ -1992,16 +2018,16 @@
                 {/* Mistakes Multi-select */}
                 {state.mistakes.length > 0 && (
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">
                       Mistakes
                     </label>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-1.5 md:gap-2">
                       {state.mistakes.map(mistake => (
                         <button
                           key={mistake.id}
                           type="button"
                           onClick={() => toggleMistake(mistake.id)}
-                          className={`px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                          className={`px-2 md:px-3 py-1 md:py-1.5 rounded-full text-xs md:text-sm font-medium transition-colors ${
                             form.mistakeIds.includes(mistake.id)
                               ? 'bg-red-100 text-red-700 border-2 border-red-300'
                               : 'bg-gray-100 text-gray-600 border-2 border-transparent hover:bg-gray-200'
@@ -2016,7 +2042,7 @@
 
                 {/* Screenshot Upload */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                     Screenshot
                   </label>
                   <input
@@ -2031,10 +2057,10 @@
                       <img 
                         src={form.screenshot} 
                         alt="Trade screenshot" 
-                        className="w-full max-h-48 object-contain rounded-lg border border-gray-200 bg-gray-50"
+                        className="w-full max-h-32 md:max-h-48 object-contain rounded-lg border border-gray-200 bg-gray-50"
                       />
                       <div className="absolute top-2 right-2 flex gap-2">
-                        <span className="px-2 py-1 bg-black/60 text-white text-xs rounded">
+                        <span className="px-2 py-1 bg-black/60 text-white text-[10px] md:text-xs rounded">
                           {Math.round((form.screenshot.length - 'data:image/jpeg;base64,'.length) * 0.75 / 1024)}KB
                         </span>
                         <button
@@ -2050,41 +2076,41 @@
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="w-full py-8 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 transition-colors flex flex-col items-center gap-2 text-gray-500"
+                      className="w-full py-4 md:py-8 border-2 border-dashed border-gray-300 rounded-lg hover:border-gray-400 transition-colors flex flex-col items-center gap-1 md:gap-2 text-gray-500"
                     >
                       {Icons.upload}
-                      <span className="text-sm">Click to upload (auto-compressed to max 200KB)</span>
+                      <span className="text-xs md:text-sm">Tap to upload</span>
                     </button>
                   )}
                 </div>
 
                 {/* Notes */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1">
                     Notes
                   </label>
                   <textarea
                     value={form.notes}
                     onChange={(e) => handleChange('notes', e.target.value)}
-                    placeholder="Trade notes, observations, lessons learned..."
-                    rows={3}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    placeholder="Trade notes..."
+                    rows={2}
+                    className="w-full px-2 md:px-3 py-1.5 md:py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                   />
                 </div>
 
                 {/* Trade Rating */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Trade Rating
+                  <label className="block text-xs md:text-sm font-medium text-gray-700 mb-1 md:mb-2">
+                    Rating
                   </label>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2 md:gap-3">
                     <StarRating 
                       value={form.rating} 
                       onChange={(rating) => handleChange('rating', rating)} 
                       size="lg"
                     />
                     {form.rating > 0 && (
-                      <span className="text-sm text-gray-500">
+                      <span className="text-xs md:text-sm text-gray-500">
                         {form.rating === 1 && 'Poor'}
                         {form.rating === 2 && 'Below Average'}
                         {form.rating === 3 && 'Average'}
@@ -2753,36 +2779,36 @@
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2 md:gap-4">
             <div className="bg-white p-3 md:p-6 rounded-xl border border-gray-200 shadow-sm col-span-2 md:col-span-1">
               <p className="text-xs md:text-sm font-medium text-gray-500 mb-1">Total P&L</p>
-              <p className={`text-2xl md:text-3xl font-bold ${metrics.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              <p className={`text-xl sm:text-2xl md:text-3xl font-bold truncate ${metrics.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                 {formatCurrency(metrics.totalPnL)}
               </p>
             </div>
             <div className="bg-white p-3 md:p-6 rounded-xl border border-gray-200 shadow-sm">
               <p className="text-xs md:text-sm font-medium text-gray-500 mb-1">Win/Loss</p>
-              <p className="text-lg md:text-xl font-bold text-gray-900">
+              <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900">
                 <span className="text-emerald-600">{metrics.wins}W</span>{' / '}<span className="text-red-600">{metrics.losses}L</span>
               </p>
-              <p className="text-xs md:text-sm text-gray-500 mt-1">{metrics.winRate}% Win Rate</p>
+              <p className="text-xs md:text-sm text-gray-500 mt-1">{metrics.winRate}%</p>
             </div>
             <div className="bg-white p-3 md:p-6 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs md:text-sm font-medium text-gray-500 mb-1">Avg W/L Ratio</p>
-              <p className="text-lg md:text-xl font-bold text-gray-900">{metrics.avgWinLossRatio}:1</p>
+              <p className="text-xs md:text-sm font-medium text-gray-500 mb-1">Avg W/L</p>
+              <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900">{metrics.avgWinLossRatio}:1</p>
               <p className="text-[10px] md:text-xs text-gray-500 mt-1 truncate">
                 {formatCurrencyShort(metrics.avgWin)} / {formatCurrencyShort(metrics.avgLoss)}
               </p>
             </div>
             <div className="bg-white p-3 md:p-6 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-xs md:text-sm font-medium text-gray-500 mb-1">Total Trades</p>
-              <p className="text-2xl md:text-3xl font-bold text-gray-900">{metrics.totalTrades}</p>
+              <p className="text-xs md:text-sm font-medium text-gray-500 mb-1">Trades</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{metrics.totalTrades}</p>
               {metrics.avgDailyTrades > 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  avg {metrics.avgDailyTrades.toFixed(1)}/day
+                <p className="text-[10px] md:text-xs text-gray-500 mt-1">
+                  {metrics.avgDailyTrades.toFixed(1)}/day
                 </p>
               )}
             </div>
-            <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-              <p className="text-sm font-medium text-gray-500 mb-1">Risk/Reward</p>
-              <p className="text-3xl font-bold text-gray-900">{metrics.riskRewardRatio}:1</p>
+            <div className="bg-white p-3 md:p-6 rounded-xl border border-gray-200 shadow-sm">
+              <p className="text-xs md:text-sm font-medium text-gray-500 mb-1">R/R</p>
+              <p className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{metrics.riskRewardRatio}:1</p>
             </div>
           </div>
 
@@ -2987,61 +3013,61 @@
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+          <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+            <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">{Icons.trendUp}</div>
-                <p className="text-sm font-medium text-gray-500">Biggest Win</p>
+                <div className="p-1.5 md:p-2 bg-emerald-100 rounded-lg text-emerald-600">{Icons.trendUp}</div>
+                <p className="text-xs md:text-sm font-medium text-gray-500">Biggest Win</p>
               </div>
               {metrics.biggestWin ? (
                 <>
-                  <p className="text-xl font-bold text-emerald-600">{formatCurrency(metrics.biggestWin.derived.pnlFinal)}</p>
-                  <p className="text-sm text-gray-500">{metrics.biggestWin.ticker} • {metrics.biggestWin.exitDate || metrics.biggestWin.entryDate}</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-emerald-600 truncate">{formatCurrency(metrics.biggestWin.derived.pnlFinal)}</p>
+                  <p className="text-xs md:text-sm text-gray-500 truncate">{metrics.biggestWin.ticker} • {metrics.biggestWin.exitDate || metrics.biggestWin.entryDate}</p>
                 </>
               ) : (
-                <p className="text-sm text-gray-400 italic">No trades yet</p>
+                <p className="text-xs md:text-sm text-gray-400 italic">No trades yet</p>
               )}
             </div>
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 bg-red-100 rounded-lg text-red-600">{Icons.trendDown}</div>
-                <p className="text-sm font-medium text-gray-500">Biggest Loss</p>
+                <div className="p-1.5 md:p-2 bg-red-100 rounded-lg text-red-600">{Icons.trendDown}</div>
+                <p className="text-xs md:text-sm font-medium text-gray-500">Biggest Loss</p>
               </div>
               {metrics.biggestLoss ? (
                 <>
-                  <p className="text-xl font-bold text-red-600">{formatCurrency(metrics.biggestLoss.derived.pnlFinal)}</p>
-                  <p className="text-sm text-gray-500">{metrics.biggestLoss.ticker} • {metrics.biggestLoss.exitDate || metrics.biggestLoss.entryDate}</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-red-600 truncate">{formatCurrency(metrics.biggestLoss.derived.pnlFinal)}</p>
+                  <p className="text-xs md:text-sm text-gray-500 truncate">{metrics.biggestLoss.ticker} • {metrics.biggestLoss.exitDate || metrics.biggestLoss.entryDate}</p>
                 </>
               ) : (
-                <p className="text-sm text-gray-400 italic">No trades yet</p>
+                <p className="text-xs md:text-sm text-gray-400 italic">No trades yet</p>
               )}
             </div>
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 bg-emerald-100 rounded-lg text-emerald-600">{Icons.trendUp}</div>
-                <p className="text-sm font-medium text-gray-500">Best Day</p>
+                <div className="p-1.5 md:p-2 bg-emerald-100 rounded-lg text-emerald-600">{Icons.trendUp}</div>
+                <p className="text-xs md:text-sm font-medium text-gray-500">Best Day</p>
               </div>
               {metrics.bestDay ? (
                 <>
-                  <p className="text-xl font-bold text-emerald-600">{formatCurrency(metrics.bestDay[1])}</p>
-                  <p className="text-sm text-gray-500">{metrics.bestDay[0]}</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-emerald-600 truncate">{formatCurrency(metrics.bestDay[1])}</p>
+                  <p className="text-xs md:text-sm text-gray-500">{metrics.bestDay[0]}</p>
                 </>
               ) : (
-                <p className="text-sm text-gray-400 italic">No trades yet</p>
+                <p className="text-xs md:text-sm text-gray-400 italic">No trades yet</p>
               )}
             </div>
-            <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
+            <div className="bg-white p-3 md:p-5 rounded-xl border border-gray-200 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <div className="p-2 bg-red-100 rounded-lg text-red-600">{Icons.trendDown}</div>
-                <p className="text-sm font-medium text-gray-500">Worst Day</p>
+                <div className="p-1.5 md:p-2 bg-red-100 rounded-lg text-red-600">{Icons.trendDown}</div>
+                <p className="text-xs md:text-sm font-medium text-gray-500">Worst Day</p>
               </div>
               {metrics.worstDay ? (
                 <>
-                  <p className="text-xl font-bold text-red-600">{formatCurrency(metrics.worstDay[1])}</p>
-                  <p className="text-sm text-gray-500">{metrics.worstDay[0]}</p>
+                  <p className="text-base sm:text-lg md:text-xl font-bold text-red-600 truncate">{formatCurrency(metrics.worstDay[1])}</p>
+                  <p className="text-xs md:text-sm text-gray-500">{metrics.worstDay[0]}</p>
                 </>
               ) : (
-                <p className="text-sm text-gray-400 italic">No trades yet</p>
+                <p className="text-xs md:text-sm text-gray-400 italic">No trades yet</p>
               )}
             </div>
           </div>
@@ -3372,11 +3398,11 @@
       onAddFlag,
       onRemoveFlag,
       onToggleFlagStatus,
-      // For mentee view
+      // For student view
       myTradeFeedback = [],
       myTradeFlags = [],
       markFeedbackAsRead,
-      // Trade Questions (mentee asks, mentor answers)
+      // Trade Questions (student asks, mentor answers)
       tradeQuestions = [],
       onAskQuestion,
       onAnswerQuestion,
@@ -3400,7 +3426,7 @@
       const [submittingFeedback, setSubmittingFeedback] = useState(false);
       const [showFlagMenu, setShowFlagMenu] = useState(false);
 
-      // Question form state (for mentee)
+      // Question form state (for student)
       const [showQuestionForm, setShowQuestionForm] = useState(false);
       const [questionType, setQuestionType] = useState('general');
       const [questionContent, setQuestionContent] = useState('');
@@ -3410,7 +3436,7 @@
       const [answerContents, setAnswerContents] = useState({});
       const [submittingAnswerId, setSubmittingAnswerId] = useState(null);
 
-      // Get feedback for the current context (mentor view vs mentee view)
+      // Get feedback for the current context (mentor view vs student view)
       const activeFeedback = isMentorView ? tradeFeedback : myTradeFeedback;
       const activeFlags = isMentorView ? tradeFlags : myTradeFlags;
 
@@ -3421,7 +3447,7 @@
       const getTradeFeedback = (tradeId) => activeFeedback.filter(f => f.tradeId === tradeId);
       const getTradeFlag = (tradeId) => activeFlags.find(f => f.tradeId === tradeId);
 
-      // Mark feedback as read when mentee views a trade (not for mentor)
+      // Mark feedback as read when student views a trade (not for mentor)
       useEffect(() => {
         if (!viewingTrade || isMentorView || !markFeedbackAsRead) return;
         
@@ -3815,29 +3841,29 @@
           </div>
 
           {/* Filters Toolbar */}
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4" onClick={(e) => {
+          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-3 md:p-4 overflow-x-auto" onClick={(e) => {
             // Close dropdowns when clicking outside
             if (!e.target.closest('[data-dropdown]')) setOpenDropdown(null);
           }}>
-            <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-wrap items-end gap-2 md:gap-3 min-w-0">
               {/* Date Range */}
-              <div className="flex gap-2 items-end">
+              <div className="flex gap-2 items-end flex-shrink-0">
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">From</label>
+                  <label className="block text-[10px] md:text-xs font-medium text-gray-500 mb-1">From</label>
                   <input
                     type="date"
                     value={filters.dateStart}
                     onChange={(e) => handleFilterChange('dateStart', e.target.value)}
-                    className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-[115px] md:w-auto px-1.5 md:px-2 py-1.5 text-xs md:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-gray-500 mb-1">To</label>
+                  <label className="block text-[10px] md:text-xs font-medium text-gray-500 mb-1">To</label>
                   <input
                     type="date"
                     value={filters.dateEnd}
                     onChange={(e) => handleFilterChange('dateEnd', e.target.value)}
-                    className="px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    className="w-[115px] md:w-auto px-1.5 md:px-2 py-1.5 text-xs md:text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
               </div>
@@ -4366,7 +4392,7 @@
             title={notesModalData.title}
           />
 
-          {/* Trade View Modal (for read-only/mentor view OR mentee viewing feedback) */}
+          {/* Trade View Modal (for read-only/mentor view OR student viewing feedback) */}
           {viewingTrade && (isReadOnly || activeFeedback.length > 0) && (
             <div className="fixed inset-0 z-50 overflow-y-auto">
               <div className="fixed inset-0 bg-black/50" onClick={() => setViewingTrade(null)} />
@@ -4685,7 +4711,7 @@
                                     </div>
                                     <p className="text-sm text-gray-700">{q.question}</p>
                                     <p className="text-xs text-gray-400 mt-1">
-                                      {q.menteeName || 'You'} • {q.createdAt?.toDate ? q.createdAt.toDate().toLocaleDateString() : 'Just now'}
+                                      {q.studentName || 'You'} • {q.createdAt?.toDate ? q.createdAt.toDate().toLocaleDateString() : 'Just now'}
                                     </p>
                                   </div>
                                 </div>
@@ -4755,7 +4781,7 @@
                         );
                       })()}
 
-                      {/* Ask Question Form (Mentee Only - when they have a mentor) */}
+                      {/* Ask Question Form (Student Only - when they have a mentor) */}
                       {!isMentorView && userProfile?.mentorId && onAskQuestion && (
                         <>
                           {!showQuestionForm ? (
@@ -5477,9 +5503,9 @@
                 </div>
 
                 {/* Calendar Grid */}
-                <div className="grid grid-cols-7 gap-1">
+                <div className="grid grid-cols-7 gap-0.5 md:gap-1">
                   {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((day, i) => (
-                    <div key={i} className="text-center text-xs font-medium text-gray-500 py-2">
+                    <div key={i} className="text-center text-[10px] md:text-xs font-medium text-gray-500 py-1 md:py-2">
                       {day}
                     </div>
                   ))}
@@ -5494,14 +5520,28 @@
                       metDailyGoal = d.pnl >= goalProgress.dailyTarget;
                     }
                     
+                    // Format P&L compactly for mobile
+                    const formatPnLCompact = (pnl) => {
+                      const absAmount = Math.abs(pnl);
+                      const prefix = pnl >= 0 ? '+' : '-';
+                      if (absAmount >= 1000000) {
+                        return prefix + (absAmount / 1000000).toFixed(1) + 'M';
+                      } else if (absAmount >= 10000) {
+                        return prefix + (absAmount / 1000).toFixed(0) + 'K';
+                      } else if (absAmount >= 1000) {
+                        return prefix + (absAmount / 1000).toFixed(1) + 'K';
+                      }
+                      return prefix + absAmount.toFixed(0);
+                    };
+                    
                     return (
                       <button
                         key={i}
                         onClick={() => d.day && setSelectedDate(d.date)}
                         disabled={!d.day}
                         className={`
-                          min-h-[60px] md:min-h-[72px] p-1 rounded-lg flex flex-col items-center justify-start
-                          transition-all relative
+                          min-h-[52px] md:min-h-[72px] p-0.5 md:p-1 rounded-lg flex flex-col items-center justify-start
+                          transition-all relative overflow-hidden
                           ${!d.day ? 'invisible' : ''}
                           ${d.date === selectedDate ? 'ring-2 ring-blue-500 bg-blue-50' : ''}
                           ${d.date === todayISO() && d.date !== selectedDate ? 'ring-1 ring-gray-300' : ''}
@@ -5513,23 +5553,24 @@
                       >
                         {d.day && (
                           <>
-                            <span className={`text-xs md:text-sm font-semibold ${d.date === todayISO() ? 'text-blue-600' : 'text-gray-700'}`}>
+                            <span className={`text-[10px] md:text-sm font-semibold ${d.date === todayISO() ? 'text-blue-600' : 'text-gray-700'}`}>
                               {d.day}
                             </span>
                             {d.trades > 0 && (
-                              <div className="flex flex-col items-center leading-tight">
-                                <span className={`text-[10px] md:text-xs font-bold ${d.pnl >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
-                                  {formatCurrencyShort(d.pnl)}
+                              <div className="flex flex-col items-center leading-none w-full">
+                                <span className={`text-[9px] md:text-xs font-bold truncate w-full text-center ${d.pnl >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                                  <span className="md:hidden">{formatPnLCompact(d.pnl)}</span>
+                                  <span className="hidden md:inline">{formatCurrencyShort(d.pnl)}</span>
                                 </span>
-                                <span className="text-[8px] md:text-[10px] text-gray-500">{d.wins}W/{d.losses}L</span>
+                                <span className="text-[7px] md:text-[10px] text-gray-500">{d.wins}W/{d.losses}L</span>
                               </div>
                             )}
                             {d.hasNote && d.trades === 0 && (
-                              <span className="text-[10px] text-blue-500">📝</span>
+                              <span className="text-[8px] md:text-[10px]">📝</span>
                             )}
                             {/* Goal indicator - only on trading days */}
                             {metDailyGoal !== null && (
-                              <span className="text-[8px]" title={metDailyGoal ? 'Hit daily goal' : 'Missed daily goal'}>
+                              <span className="text-[6px] md:text-[8px]" title={metDailyGoal ? 'Hit daily goal' : 'Missed daily goal'}>
                                 {metDailyGoal ? '✅' : '❌'}
                               </span>
                             )}
@@ -6069,7 +6110,9 @@
       const [editingSetup, setEditingSetup] = useState(null);
       const [setupName, setSetupName] = useState('');
       const [setupDescription, setSetupDescription] = useState('');
+      const [setupScreenshot, setSetupScreenshot] = useState(null);
       const [deleteConfirm, setDeleteConfirm] = useState(null);
+      const [viewingScreenshot, setViewingScreenshot] = useState(null);
       const [error, setError] = useState('');
 
       // Calculate setup analytics
@@ -6168,6 +6211,7 @@
         setEditingSetup(null);
         setSetupName('');
         setSetupDescription('');
+        setSetupScreenshot(null);
         setError('');
         setModalOpen(true);
       };
@@ -6176,6 +6220,7 @@
         setEditingSetup(setup);
         setSetupName(setup.name);
         setSetupDescription(setup.description || '');
+        setSetupScreenshot(setup.screenshot || null);
         setError('');
         setModalOpen(true);
       };
@@ -6185,6 +6230,7 @@
         setEditingSetup(null);
         setSetupName('');
         setSetupDescription('');
+        setSetupScreenshot(null);
         setError('');
       };
 
@@ -6212,7 +6258,7 @@
             ...state,
             setups: state.setups.map(s => 
               s.id === editingSetup.id 
-                ? { ...s, name: trimmedName, description: setupDescription.trim(), updatedAt: nowISO() }
+                ? { ...s, name: trimmedName, description: setupDescription.trim(), screenshot: setupScreenshot, updatedAt: nowISO() }
                 : s
             ),
           });
@@ -6222,6 +6268,7 @@
             id: generateId(),
             name: trimmedName,
             description: setupDescription.trim(),
+            screenshot: setupScreenshot,
             rules: [],
             createdAt: nowISO(),
             updatedAt: nowISO(),
@@ -6435,16 +6482,33 @@
                   const maxPnL = Math.max(...setupAnalytics.map(s => Math.abs(s.totalPnL)), 1);
                   const pnlBarWidth = (Math.abs(setup.totalPnL) / maxPnL) * 100;
                   const winPercent = setup.wins + setup.losses > 0 ? (setup.wins / (setup.wins + setup.losses)) * 100 : 0;
+                  const fullSetup = state.setups.find(s => s.id === setup.id);
                   
                   return (
                     <div key={setup.id} className="px-6 py-4 hover:bg-gray-50 transition-colors">
                       <div className="flex items-center justify-between gap-4">
-                        {/* Left: Name & Description */}
-                        <div className="flex-shrink-0 w-48">
-                          <h4 className="font-medium text-gray-900">{setup.name}</h4>
-                          {setup.description && (
-                            <p className="text-xs text-gray-500 mt-0.5 truncate">{setup.description}</p>
+                        {/* Left: Screenshot thumbnail + Name & Description */}
+                        <div className="flex items-center gap-3 flex-shrink-0 w-56">
+                          {fullSetup?.screenshot ? (
+                            <img 
+                              src={fullSetup.screenshot} 
+                              alt={setup.name}
+                              onClick={() => setViewingScreenshot(fullSetup.screenshot)}
+                              className="w-12 h-12 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-80 transition-opacity"
+                            />
+                          ) : (
+                            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-gray-400">
+                              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                              </svg>
+                            </div>
                           )}
+                          <div className="min-w-0">
+                            <h4 className="font-medium text-gray-900">{setup.name}</h4>
+                            {setup.description && (
+                              <p className="text-xs text-gray-500 mt-0.5 truncate">{setup.description}</p>
+                            )}
+                          </div>
                         </div>
                         
                         {/* Middle: Stats & Bars */}
@@ -6557,6 +6621,71 @@
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Example Screenshot
+                      </label>
+                      {setupScreenshot ? (
+                        <div className="relative">
+                          <img 
+                            src={setupScreenshot} 
+                            alt="Setup example" 
+                            className="w-full h-40 object-cover rounded-lg border border-gray-200"
+                          />
+                          <button
+                            onClick={() => setSetupScreenshot(null)}
+                            className="absolute top-2 right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      ) : (
+                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-blue-400 hover:bg-blue-50/50 transition-colors">
+                          <svg className="w-8 h-8 text-gray-400 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                          </svg>
+                          <span className="text-sm text-gray-500">Click to upload example chart</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            onChange={async (e) => {
+                              const file = e.target.files?.[0];
+                              if (!file) return;
+                              
+                              const compressImage = (file, maxWidth = 800, quality = 0.7) => {
+                                return new Promise((resolve) => {
+                                  const reader = new FileReader();
+                                  reader.onload = (e) => {
+                                    const img = new Image();
+                                    img.onload = () => {
+                                      const canvas = document.createElement('canvas');
+                                      const ratio = Math.min(maxWidth / img.width, 1);
+                                      canvas.width = img.width * ratio;
+                                      canvas.height = img.height * ratio;
+                                      const ctx = canvas.getContext('2d');
+                                      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                      resolve(canvas.toDataURL('image/jpeg', quality));
+                                    };
+                                    img.src = e.target.result;
+                                  };
+                                  reader.readAsDataURL(file);
+                                });
+                              };
+                              
+                              try {
+                                const compressed = await compressImage(file);
+                                setSetupScreenshot(compressed);
+                              } catch (err) {
+                                console.error('Failed to process image:', err);
+                              }
+                            }}
+                          />
+                        </label>
+                      )}
+                    </div>
                   </div>
                   <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 flex justify-end gap-3 rounded-b-xl">
                     <button
@@ -6621,6 +6750,30 @@
                       Cancel
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Screenshot Viewing Modal */}
+          {viewingScreenshot && (
+            <div className="fixed inset-0 z-50 overflow-y-auto">
+              <div className="fixed inset-0 bg-black/80" onClick={() => setViewingScreenshot(null)} />
+              <div className="relative min-h-screen flex items-center justify-center p-4">
+                <div className="relative max-w-4xl w-full">
+                  <button
+                    onClick={() => setViewingScreenshot(null)}
+                    className="absolute -top-10 right-0 p-2 text-white hover:text-gray-300 transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                  <img 
+                    src={viewingScreenshot} 
+                    alt="Setup example" 
+                    className="w-full rounded-lg shadow-2xl"
+                  />
                 </div>
               </div>
             </div>
@@ -7750,45 +7903,45 @@
                   </div>
 
                   {/* Stats */}
-                  <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  <div className="flex-1 grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
                     <div>
-                      <p className="text-xs text-gray-500 uppercase">Target</p>
-                      <p className="text-xl font-bold text-gray-900">{formatCurrency(yearlyGoalProgress.goal.target)}</p>
+                      <p className="text-[10px] md:text-xs text-gray-500 uppercase">Target</p>
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900 truncate">{formatCurrency(yearlyGoalProgress.goal.target)}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 uppercase">Current</p>
-                      <p className={`text-xl font-bold ${yearlyGoalProgress.yearPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      <p className="text-[10px] md:text-xs text-gray-500 uppercase">Current</p>
+                      <p className={`text-base sm:text-lg md:text-xl font-bold truncate ${yearlyGoalProgress.yearPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                         {formatCurrency(yearlyGoalProgress.yearPnL)}
                       </p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 uppercase">Trading Days Left</p>
-                      <p className="text-xl font-bold text-gray-900">{yearlyGoalProgress.tradingDaysRemaining}</p>
+                      <p className="text-[10px] md:text-xs text-gray-500 uppercase">Trade Days</p>
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900">{yearlyGoalProgress.tradingDaysRemaining}</p>
                     </div>
                     <div>
-                      <p className="text-xs text-gray-500 uppercase">Calendar Days Left</p>
-                      <p className="text-xl font-bold text-gray-900">{yearlyGoalProgress.calendarDaysRemaining}</p>
+                      <p className="text-[10px] md:text-xs text-gray-500 uppercase">Days Left</p>
+                      <p className="text-base sm:text-lg md:text-xl font-bold text-gray-900">{yearlyGoalProgress.calendarDaysRemaining}</p>
                     </div>
                   </div>
                 </div>
 
                 {/* Extrapolated Targets */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  <div className="bg-blue-50 rounded-lg p-4 text-center">
-                    <p className="text-xs text-blue-600 uppercase font-medium">Daily Target</p>
-                    <p className="text-lg font-bold text-blue-900">{formatCurrency(yearlyGoalProgress.dailyTarget)}</p>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3">
+                  <div className="bg-blue-50 rounded-lg p-3 md:p-4 text-center">
+                    <p className="text-[10px] md:text-xs text-blue-600 uppercase font-medium">Daily</p>
+                    <p className="text-sm sm:text-base md:text-lg font-bold text-blue-900 truncate">{formatCurrency(yearlyGoalProgress.dailyTarget)}</p>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-4 text-center">
-                    <p className="text-xs text-blue-600 uppercase font-medium">Weekly Target</p>
-                    <p className="text-lg font-bold text-blue-900">{formatCurrency(yearlyGoalProgress.weeklyTarget)}</p>
+                  <div className="bg-blue-50 rounded-lg p-3 md:p-4 text-center">
+                    <p className="text-[10px] md:text-xs text-blue-600 uppercase font-medium">Weekly</p>
+                    <p className="text-sm sm:text-base md:text-lg font-bold text-blue-900 truncate">{formatCurrency(yearlyGoalProgress.weeklyTarget)}</p>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-4 text-center">
-                    <p className="text-xs text-blue-600 uppercase font-medium">Monthly Target</p>
-                    <p className="text-lg font-bold text-blue-900">{formatCurrency(yearlyGoalProgress.monthlyTarget)}</p>
+                  <div className="bg-blue-50 rounded-lg p-3 md:p-4 text-center">
+                    <p className="text-[10px] md:text-xs text-blue-600 uppercase font-medium">Monthly</p>
+                    <p className="text-sm sm:text-base md:text-lg font-bold text-blue-900 truncate">{formatCurrency(yearlyGoalProgress.monthlyTarget)}</p>
                   </div>
-                  <div className="bg-blue-50 rounded-lg p-4 text-center">
-                    <p className="text-xs text-blue-600 uppercase font-medium">Quarterly Target</p>
-                    <p className="text-lg font-bold text-blue-900">{formatCurrency(yearlyGoalProgress.quarterlyTarget)}</p>
+                  <div className="bg-blue-50 rounded-lg p-3 md:p-4 text-center">
+                    <p className="text-[10px] md:text-xs text-blue-600 uppercase font-medium">Quarterly</p>
+                    <p className="text-sm sm:text-base md:text-lg font-bold text-blue-900 truncate">{formatCurrency(yearlyGoalProgress.quarterlyTarget)}</p>
                   </div>
                 </div>
               </div>
@@ -8513,8 +8666,65 @@
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-2xl font-bold text-blue-600">
-                    {userProfile.displayName?.charAt(0)?.toUpperCase() || '?'}
+                  <div className="relative group">
+                    {userProfile.photoURL ? (
+                      <img 
+                        src={userProfile.photoURL} 
+                        alt={userProfile.displayName}
+                        className="w-16 h-16 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center text-2xl font-bold text-blue-600">
+                        {userProfile.displayName?.charAt(0)?.toUpperCase() || '?'}
+                      </div>
+                    )}
+                    <label className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                      <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                      </svg>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          
+                          // Compress and convert to base64
+                          const compressImage = (file, maxWidth = 200, quality = 0.8) => {
+                            return new Promise((resolve) => {
+                              const reader = new FileReader();
+                              reader.onload = (e) => {
+                                const img = new Image();
+                                img.onload = () => {
+                                  const canvas = document.createElement('canvas');
+                                  const ratio = Math.min(maxWidth / img.width, maxWidth / img.height);
+                                  canvas.width = img.width * ratio;
+                                  canvas.height = img.height * ratio;
+                                  const ctx = canvas.getContext('2d');
+                                  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+                                  resolve(canvas.toDataURL('image/jpeg', quality));
+                                };
+                                img.src = e.target.result;
+                              };
+                              reader.readAsDataURL(file);
+                            });
+                          };
+                          
+                          try {
+                            const compressedDataUrl = await compressImage(file);
+                            await db.collection('users').doc(userProfile.uid).update({
+                              photoURL: compressedDataUrl
+                            });
+                            if (onUpdate) onUpdate();
+                          } catch (err) {
+                            console.error('Failed to upload photo:', err);
+                            alert('Failed to upload photo. Please try again.');
+                          }
+                        }}
+                      />
+                    </label>
                   </div>
                   <div>
                     <h2 className="text-xl font-bold text-gray-900">{userProfile.displayName}</h2>
@@ -8540,11 +8750,11 @@
                                 mentorId: firebase.firestore.FieldValue.delete(),
                                 mentorName: firebase.firestore.FieldValue.delete(),
                               });
-                              // Remove from mentor's mentee list
+                              // Remove from mentor's student list
                               if (userProfile.mentorId) {
                                 await db.collection('mentorships')
                                   .doc(userProfile.mentorId)
-                                  .collection('mentees')
+                                  .collection('students')
                                   .doc(userProfile.uid)
                                   .delete();
                               }
@@ -8585,85 +8795,85 @@
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="font-semibold text-gray-900">All-Time Statistics</h2>
             </div>
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               {/* Main Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <p className="text-xs text-gray-500 uppercase mb-1">Total P&L</p>
-                  <p className={`text-2xl font-bold ${allTimeStats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+                <div className="bg-gray-50 rounded-lg p-3 md:p-4 text-center">
+                  <p className="text-[10px] md:text-xs text-gray-500 uppercase mb-1">Total P&L</p>
+                  <p className={`text-lg sm:text-xl md:text-2xl font-bold truncate ${allTimeStats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(allTimeStats.totalPnL)}
                   </p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <p className="text-xs text-gray-500 uppercase mb-1">Total Trades</p>
-                  <p className="text-2xl font-bold text-gray-900">{allTimeStats.totalTrades}</p>
+                <div className="bg-gray-50 rounded-lg p-3 md:p-4 text-center">
+                  <p className="text-[10px] md:text-xs text-gray-500 uppercase mb-1">Trades</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{allTimeStats.totalTrades}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <p className="text-xs text-gray-500 uppercase mb-1">Win Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">{allTimeStats.winRate}%</p>
+                <div className="bg-gray-50 rounded-lg p-3 md:p-4 text-center">
+                  <p className="text-[10px] md:text-xs text-gray-500 uppercase mb-1">Win Rate</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{allTimeStats.winRate}%</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <p className="text-xs text-gray-500 uppercase mb-1">Profit Factor</p>
-                  <p className="text-2xl font-bold text-gray-900">{allTimeStats.profitFactor}</p>
+                <div className="bg-gray-50 rounded-lg p-3 md:p-4 text-center">
+                  <p className="text-[10px] md:text-xs text-gray-500 uppercase mb-1">Profit Factor</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{allTimeStats.profitFactor}</p>
                 </div>
               </div>
 
               {/* Secondary Stats */}
-              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Wins / Losses</p>
-                  <p className="text-lg font-semibold">
+              <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2 md:gap-3">
+                <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                  <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">W / L</p>
+                  <p className="text-base md:text-lg font-semibold">
                     <span className="text-emerald-600">{allTimeStats.wins}</span>
                     {' / '}
                     <span className="text-red-600">{allTimeStats.losses}</span>
                   </p>
                 </div>
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Avg Win</p>
-                  <p className="text-lg font-semibold text-emerald-600">{formatCurrencyShort(allTimeStats.avgWin)}</p>
+                <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                  <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">Avg Win</p>
+                  <p className="text-base md:text-lg font-semibold text-emerald-600 truncate">{formatCurrencyShort(allTimeStats.avgWin)}</p>
                 </div>
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Avg Loss</p>
-                  <p className="text-lg font-semibold text-red-600">-{formatCurrencyShort(allTimeStats.avgLoss)}</p>
+                <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                  <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">Avg Loss</p>
+                  <p className="text-base md:text-lg font-semibold text-red-600 truncate">-{formatCurrencyShort(allTimeStats.avgLoss)}</p>
                 </div>
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Biggest Win</p>
-                  <p className="text-lg font-semibold text-emerald-600">{formatCurrencyShort(allTimeStats.biggestWin)}</p>
+                <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                  <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">Best Win</p>
+                  <p className="text-base md:text-lg font-semibold text-emerald-600 truncate">{formatCurrencyShort(allTimeStats.biggestWin)}</p>
                 </div>
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Biggest Loss</p>
-                  <p className="text-lg font-semibold text-red-600">{formatCurrencyShort(allTimeStats.biggestLoss)}</p>
+                <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                  <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">Worst Loss</p>
+                  <p className="text-base md:text-lg font-semibold text-red-600 truncate">{formatCurrencyShort(allTimeStats.biggestLoss)}</p>
                 </div>
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Trading Days</p>
-                  <p className="text-lg font-semibold text-gray-900">{allTimeStats.tradingDays}</p>
+                <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                  <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">Days</p>
+                  <p className="text-base md:text-lg font-semibold text-gray-900">{allTimeStats.tradingDays}</p>
                 </div>
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Green / Red Days</p>
-                  <p className="text-lg font-semibold">
+                <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                  <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">G / R Days</p>
+                  <p className="text-base md:text-lg font-semibold">
                     <span className="text-emerald-600">{allTimeStats.greenDays}</span>
                     {' / '}
                     <span className="text-red-600">{allTimeStats.redDays}</span>
                   </p>
                 </div>
-                <div className="border border-gray-200 rounded-lg p-3">
-                  <p className="text-[10px] text-gray-500 uppercase">Avg Daily P&L</p>
-                  <p className={`text-lg font-semibold ${allTimeStats.avgDailyPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                  <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">Avg Daily</p>
+                  <p className={`text-base md:text-lg font-semibold truncate ${allTimeStats.avgDailyPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrencyShort(allTimeStats.avgDailyPnL)}
                   </p>
                 </div>
                 {allTimeStats.bestDay && (
-                  <div className="border border-gray-200 rounded-lg p-3">
-                    <p className="text-[10px] text-gray-500 uppercase">Best Day</p>
-                    <p className="text-lg font-semibold text-emerald-600">{formatCurrencyShort(allTimeStats.bestDay[1])}</p>
-                    <p className="text-[10px] text-gray-400">{allTimeStats.bestDay[0]}</p>
+                  <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                    <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">Best Day</p>
+                    <p className="text-base md:text-lg font-semibold text-emerald-600 truncate">{formatCurrencyShort(allTimeStats.bestDay[1])}</p>
+                    <p className="text-[9px] md:text-[10px] text-gray-400 truncate">{allTimeStats.bestDay[0]}</p>
                   </div>
                 )}
                 {allTimeStats.worstDay && (
-                  <div className="border border-gray-200 rounded-lg p-3">
-                    <p className="text-[10px] text-gray-500 uppercase">Worst Day</p>
-                    <p className="text-lg font-semibold text-red-600">{formatCurrencyShort(allTimeStats.worstDay[1])}</p>
-                    <p className="text-[10px] text-gray-400">{allTimeStats.worstDay[0]}</p>
+                  <div className="border border-gray-200 rounded-lg p-2 md:p-3">
+                    <p className="text-[9px] md:text-[10px] text-gray-500 uppercase">Worst Day</p>
+                    <p className="text-base md:text-lg font-semibold text-red-600 truncate">{formatCurrencyShort(allTimeStats.worstDay[1])}</p>
+                    <p className="text-[9px] md:text-[10px] text-gray-400 truncate">{allTimeStats.worstDay[0]}</p>
                   </div>
                 )}
               </div>
@@ -8675,24 +8885,24 @@
             <div className="px-6 py-4 border-b border-gray-200">
               <h2 className="font-semibold text-gray-900">Challenge History</h2>
             </div>
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               {/* Challenge Summary */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                <div className="bg-blue-50 rounded-lg p-4 text-center">
-                  <p className="text-xs text-blue-600 uppercase mb-1">Total Challenges</p>
-                  <p className="text-2xl font-bold text-blue-900">{challengeStats.total}</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6">
+                <div className="bg-blue-50 rounded-lg p-3 md:p-4 text-center">
+                  <p className="text-[10px] md:text-xs text-blue-600 uppercase mb-1">Total</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-blue-900">{challengeStats.total}</p>
                 </div>
-                <div className="bg-emerald-50 rounded-lg p-4 text-center">
-                  <p className="text-xs text-emerald-600 uppercase mb-1">Completed</p>
-                  <p className="text-2xl font-bold text-emerald-700">{challengeStats.completed}</p>
+                <div className="bg-emerald-50 rounded-lg p-3 md:p-4 text-center">
+                  <p className="text-[10px] md:text-xs text-emerald-600 uppercase mb-1">Completed</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-emerald-700">{challengeStats.completed}</p>
                 </div>
-                <div className="bg-red-50 rounded-lg p-4 text-center">
-                  <p className="text-xs text-red-600 uppercase mb-1">Failed</p>
-                  <p className="text-2xl font-bold text-red-700">{challengeStats.failed}</p>
+                <div className="bg-red-50 rounded-lg p-3 md:p-4 text-center">
+                  <p className="text-[10px] md:text-xs text-red-600 uppercase mb-1">Failed</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-red-700">{challengeStats.failed}</p>
                 </div>
-                <div className="bg-gray-50 rounded-lg p-4 text-center">
-                  <p className="text-xs text-gray-600 uppercase mb-1">Success Rate</p>
-                  <p className="text-2xl font-bold text-gray-900">{challengeStats.successRate}%</p>
+                <div className="bg-gray-50 rounded-lg p-3 md:p-4 text-center">
+                  <p className="text-[10px] md:text-xs text-gray-600 uppercase mb-1">Success</p>
+                  <p className="text-lg sm:text-xl md:text-2xl font-bold text-gray-900">{challengeStats.successRate}%</p>
                 </div>
               </div>
 
@@ -8758,31 +8968,98 @@
     // =============================================================================
     function Sidebar({ isExpanded, setIsExpanded, activePage, setActivePage, isMobile, navItems }) {
       const items = navItems || NAV_ITEMS;
+      const [showMoreMenu, setShowMoreMenu] = React.useState(false);
       
       // Mobile bottom navigation
       if (isMobile) {
+        // Show first 4 items + More button
+        const mainItems = items.slice(0, 4);
+        const moreItems = items.slice(4);
+        const isMoreActive = moreItems.some(item => item.id === activePage);
+        
         return (
-          <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30 safe-area-bottom">
-            <div className="flex justify-around items-center h-16">
-              {items.slice(0, 5).map((item) => {
-                const isActive = activePage === item.id;
-                return (
+          <>
+            {/* More Menu Overlay */}
+            {showMoreMenu && (
+              <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)}>
+                <div className="absolute bottom-20 left-4 right-4 bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
+                  <div className="p-2">
+                    {moreItems.map((item) => {
+                      const isActive = activePage === item.id;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setActivePage(item.id);
+                            setShowMoreMenu(false);
+                          }}
+                          className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
+                            isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+                          }`}
+                        >
+                          <span className="w-6 h-6 flex items-center justify-center">
+                            {Icons[item.icon]}
+                          </span>
+                          <span className="font-medium">{item.label}</span>
+                          {isActive && (
+                            <svg className="w-5 h-5 ml-auto text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {/* Bottom Navigation Bar */}
+            <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-30">
+              <div className="flex justify-around items-center h-16 px-2 pb-safe">
+                {mainItems.map((item) => {
+                  const isActive = activePage === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => {
+                        setActivePage(item.id);
+                        setShowMoreMenu(false);
+                      }}
+                      className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
+                        isActive ? 'text-blue-600' : 'text-gray-500'
+                      }`}
+                    >
+                      <span className={`${isActive ? 'scale-110' : ''} transition-transform`}>
+                        {Icons[item.icon]}
+                      </span>
+                      <span className="text-[10px] mt-1 font-medium">{item.label}</span>
+                    </button>
+                  );
+                })}
+                
+                {/* More Button */}
+                {moreItems.length > 0 && (
                   <button
-                    key={item.id}
-                    onClick={() => setActivePage(item.id)}
+                    onClick={() => setShowMoreMenu(!showMoreMenu)}
                     className={`flex flex-col items-center justify-center flex-1 h-full transition-colors ${
-                      isActive ? 'text-blue-600' : 'text-gray-500'
+                      isMoreActive || showMoreMenu ? 'text-blue-600' : 'text-gray-500'
                     }`}
                   >
-                    <span className={`${isActive ? 'scale-110' : ''} transition-transform`}>
-                      {Icons[item.icon]}
+                    <span className={`${isMoreActive || showMoreMenu ? 'scale-110' : ''} transition-transform`}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                        <circle cx="12" cy="12" r="1" fill="currentColor" />
+                        <circle cx="12" cy="5" r="1" fill="currentColor" />
+                        <circle cx="12" cy="19" r="1" fill="currentColor" />
+                      </svg>
                     </span>
-                    <span className="text-[10px] mt-1 font-medium">{item.label}</span>
+                    <span className="text-[10px] mt-1 font-medium">More</span>
                   </button>
-                );
-              })}
-            </div>
-          </nav>
+                )}
+              </div>
+            </nav>
+          </>
         );
       }
 
@@ -8872,7 +9149,7 @@
 
       const getNotificationIcon = (type) => {
         switch (type) {
-          // Mentee notifications (from mentor)
+          // Student notifications (from mentor)
           case 'feedback': return '💬';
           case 'flag': return '🚩';
           case 'checkin': return '📋';
@@ -8882,12 +9159,12 @@
           case 'session': return '📅';
           case 'session_reminder': return '⏰';
           
-          // Mentor notifications (from mentee)
+          // Mentor notifications (from student)
           case 'question_asked': return '❓';
           case 'assignment_completed': return '📋';
-          case 'mentee_daily_target': return '🎯';
-          case 'mentee_challenge_complete': return '🏅';
-          case 'mentee_milestone': return '🎉';
+          case 'student_daily_target': return '🎯';
+          case 'student_challenge_complete': return '🏅';
+          case 'student_milestone': return '🎉';
           case 'invite_accepted': return '🤝';
           
           // Self notifications (achievements)
@@ -8929,88 +9206,150 @@
         return date.toLocaleDateString();
       };
 
-      const NotificationBell = () => (
-        <div className="relative">
-          <button
-            onClick={() => setShowNotifications(!showNotifications)}
-            className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
-              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
-              <path d="M13.73 21a2 2 0 01-3.46 0" />
-            </svg>
-            {unreadCount > 0 && (
-              <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
-                {unreadCount > 9 ? '9+' : unreadCount}
-              </span>
-            )}
-          </button>
+      const NotificationBell = () => {
+        const [selectedIds, setSelectedIds] = React.useState([]);
+        const [isOpen, setIsOpen] = React.useState(false);
+        
+        const toggleSelect = (id, e) => {
+          e.stopPropagation();
+          setSelectedIds(prev => 
+            prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+          );
+        };
+        
+        const markSelectedAsRead = () => {
+          selectedIds.forEach(id => onMarkAsRead?.(id));
+          setSelectedIds([]);
+        };
+        
+        const handleOpen = () => {
+          setIsOpen(!isOpen);
+          setSelectedIds([]);
+        };
+        
+        const handleClose = () => {
+          setIsOpen(false);
+          setSelectedIds([]);
+        };
+        
+        return (
+          <>
+            <button
+              onClick={handleOpen}
+              className="relative p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
+                <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+                <path d="M13.73 21a2 2 0 01-3.46 0" />
+              </svg>
+              {unreadCount > 0 && (
+                <span className="absolute -top-0.5 -right-0.5 w-5 h-5 bg-red-500 text-white text-xs font-bold rounded-full flex items-center justify-center">
+                  {unreadCount > 9 ? '9+' : unreadCount}
+                </span>
+              )}
+            </button>
 
-          {showNotifications && (
-            <>
-              <div className="fixed inset-0" onClick={() => setShowNotifications(false)} />
-              <div className={`absolute ${isMobile ? 'right-0 left-0 mx-4' : 'right-0 w-96'} top-12 bg-white rounded-xl shadow-xl border border-gray-200 z-50 max-h-[70vh] flex flex-col`}>
-                {/* Header */}
-                <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                  <h3 className="font-semibold text-gray-900">Notifications</h3>
-                  {unreadCount > 0 && (
-                    <button
-                      onClick={() => { onMarkAllAsRead?.(); }}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium"
-                    >
-                      Mark all as read
-                    </button>
-                  )}
-                </div>
+            {isOpen && (
+              <div className="fixed inset-0 z-[100]">
+                {/* Backdrop */}
+                <div className="fixed inset-0 bg-black/20" onClick={handleClose} />
                 
-                {/* Notifications List */}
-                <div className="overflow-y-auto flex-1">
-                  {notifications.length === 0 ? (
-                    <div className="px-4 py-8 text-center text-gray-500">
-                      <div className="text-3xl mb-2">🔔</div>
-                      <p>No notifications yet</p>
-                    </div>
-                  ) : (
-                    <div className="divide-y divide-gray-100">
-                      {notifications.slice(0, 20).map(notification => (
-                        <div
-                          key={notification.id}
-                          onClick={() => {
-                            onNotificationClick?.(notification);
-                            setShowNotifications(false);
-                          }}
-                          className={`px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors ${!notification.read ? 'bg-blue-50/50' : ''}`}
+                {/* Dropdown */}
+                <div className={`fixed ${isMobile ? 'left-4 right-4 top-16' : 'right-4 top-14 w-96'} bg-white rounded-xl shadow-2xl border border-gray-200 max-h-[70vh] flex flex-col`}>
+                  {/* Header */}
+                  <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
+                    <h3 className="font-semibold text-gray-900">Notifications</h3>
+                    <div className="flex items-center gap-2">
+                      {selectedIds.length > 0 && (
+                        <button
+                          onClick={markSelectedAsRead}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
                         >
-                          <div className="flex items-start gap-3">
-                            <span className="text-xl flex-shrink-0">{getNotificationIcon(notification.type)}</span>
-                            <div className="flex-1 min-w-0">
-                              <p className={`text-sm ${!notification.read ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
-                                {notification.title}
-                              </p>
-                              <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notification.message}</p>
-                              <p className="text-xs text-gray-400 mt-1">{formatTimeAgo(notification.createdAt)}</p>
-                            </div>
-                            {!notification.read && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onMarkAsRead?.(notification.id);
-                                }}
-                                className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full"
-                                title="Mark as read"
-                              />
-                            )}
-                          </div>
-                        </div>
-                      ))}
+                          Mark selected ({selectedIds.length})
+                        </button>
+                      )}
+                      {unreadCount > 0 && selectedIds.length === 0 && (
+                        <button
+                          onClick={() => { onMarkAllAsRead?.(); }}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          Mark all as read
+                        </button>
+                      )}
+                      <button onClick={handleClose} className="p-1 hover:bg-gray-100 rounded">
+                        <svg className="w-4 h-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
                     </div>
-                  )}
+                  </div>
+                  
+                  {/* Notifications List */}
+                  <div className="overflow-y-auto flex-1">
+                    {notifications.length === 0 ? (
+                      <div className="px-4 py-8 text-center text-gray-500">
+                        <div className="text-3xl mb-2">🔔</div>
+                        <p>No notifications yet</p>
+                      </div>
+                    ) : (
+                      <div className="divide-y divide-gray-100">
+                        {notifications.slice(0, 20).map(notification => (
+                          <div
+                            key={notification.id}
+                            onClick={() => {
+                              if (!notification.read) {
+                                onMarkAsRead?.(notification.id);
+                              }
+                              onNotificationClick?.(notification);
+                              handleClose();
+                            }}
+                            className={`px-4 py-3 cursor-pointer transition-colors ${
+                              selectedIds.includes(notification.id)
+                                ? 'bg-blue-100'
+                                : !notification.read 
+                                  ? 'bg-blue-50/50 hover:bg-blue-50' 
+                                  : 'hover:bg-gray-50'
+                            }`}
+                          >
+                            <div className="flex items-start gap-3">
+                              {/* Checkbox */}
+                              <div 
+                                onClick={(e) => toggleSelect(notification.id, e)}
+                                className={`flex-shrink-0 w-5 h-5 mt-0.5 border-2 rounded cursor-pointer flex items-center justify-center transition-colors ${
+                                  selectedIds.includes(notification.id)
+                                    ? 'bg-blue-600 border-blue-600'
+                                    : 'border-gray-300 hover:border-blue-400'
+                                }`}
+                              >
+                                {selectedIds.includes(notification.id) && (
+                                  <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3">
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                  </svg>
+                                )}
+                              </div>
+                              <span className="text-xl flex-shrink-0">{getNotificationIcon(notification.type)}</span>
+                              <div className="flex-1 min-w-0">
+                                <p className={`text-sm ${!notification.read ? 'font-medium text-gray-900' : 'text-gray-700'}`}>
+                                  {notification.title}
+                                </p>
+                                <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">{notification.message}</p>
+                                <p className="text-xs text-gray-400 mt-1">{formatTimeAgo(notification.createdAt)}</p>
+                              </div>
+                              {!notification.read && (
+                                <span className="flex-shrink-0 w-2 h-2 bg-blue-500 rounded-full mt-2" />
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
-            </>
-          )}
-        </div>
-      );
+            )}
+          </>
+        );
+      };
 
       if (isMobile) {
         return (
@@ -9411,7 +9750,7 @@
                       >
                         <div className="text-2xl mb-1">👨‍🏫</div>
                         <div className="font-medium">Mentor</div>
-                        <div className="text-xs text-gray-500">Guide your mentees</div>
+                        <div className="text-xs text-gray-500">Guide your students</div>
                       </button>
                     </div>
                   </div>
@@ -9499,7 +9838,7 @@
     }
 
     // =============================================================================
-    // CHECK-INS PAGE (Mentee's view of their weekly check-ins)
+    // CHECK-INS PAGE (Student's view of their weekly check-ins)
     // =============================================================================
     function CheckinsPage({ 
       checkins, 
@@ -9827,7 +10166,7 @@
     }
 
     // =============================================================================
-    // SESSIONS PAGE (Mentee's view of their sessions)
+    // SESSIONS PAGE (Student's view of their sessions)
     // =============================================================================
     function SessionsPage({ 
       sessions, 
@@ -9982,7 +10321,7 @@
     }
 
     // =============================================================================
-    // ASSIGNMENTS PAGE (Mentee's view of their assignments)
+    // ASSIGNMENTS PAGE (Student's view of their assignments)
     // =============================================================================
     function AssignmentsPage({ 
       assignments, 
@@ -10094,7 +10433,7 @@
       };
 
       const handleSaveNotes = async (assignmentId) => {
-        await onUpdateAssignment(assignmentId, { menteeNotes: notesText });
+        await onUpdateAssignment(assignmentId, { studentNotes: notesText });
       };
 
       const handleMarkComplete = async (assignmentId) => {
@@ -10210,7 +10549,7 @@
                     }`}
                     onClick={() => {
                       setViewingAssignment(assignment);
-                      setNotesText(assignment.menteeNotes || '');
+                      setNotesText(assignment.studentNotes || '');
                       handleStartWorking(assignment);
                     }}
                   >
@@ -10405,10 +10744,10 @@
                     )}
 
                     {/* Saved Notes (for reviewed assignments) */}
-                    {viewingAssignment.status === 'reviewed' && viewingAssignment.menteeNotes && (
+                    {viewingAssignment.status === 'reviewed' && viewingAssignment.studentNotes && (
                       <div className="bg-gray-50 rounded-lg p-4">
                         <h4 className="text-sm font-medium text-gray-700 mb-1">My Notes</h4>
-                        <p className="text-gray-600 whitespace-pre-wrap">{viewingAssignment.menteeNotes}</p>
+                        <p className="text-gray-600 whitespace-pre-wrap">{viewingAssignment.studentNotes}</p>
                       </div>
                     )}
 
@@ -10445,12 +10784,12 @@
     }
 
     // =============================================================================
-    // MENTOR ASSIGNMENTS TAB (Mentor view of mentee's assignments)
+    // MENTOR ASSIGNMENTS TAB (Mentor view of student's assignments)
     // =============================================================================
     function MentorAssignmentsTab({ 
       assignments, 
-      menteeData, 
-      selectedMentee,
+      studentData, 
+      selectedStudent,
       onCreateAssignment, 
       onUpdateAssignment, 
       onDeleteAssignment,
@@ -10549,7 +10888,7 @@
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Assignments</h1>
               <p className="text-sm text-gray-500 mt-1">
-                {assignments.length} assignment{assignments.length !== 1 ? 's' : ''} for {selectedMentee?.displayName}
+                {assignments.length} assignment{assignments.length !== 1 ? 's' : ''} for {selectedStudent?.displayName}
               </p>
             </div>
             <button
@@ -10585,7 +10924,7 @@
                 📋
               </div>
               <h3 className="text-lg font-medium text-gray-900 mb-2">No assignments yet</h3>
-              <p className="text-gray-500 mb-4">Create an assignment to help guide your mentee's learning</p>
+              <p className="text-gray-500 mb-4">Create an assignment to help guide your student's learning</p>
               <button
                 onClick={() => setModalOpen(true)}
                 className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
@@ -10600,7 +10939,7 @@
                 const catInfo = ASSIGNMENT_CATEGORIES[assignment.category] || ASSIGNMENT_CATEGORIES.other;
                 const daysUntil = getDaysUntilDue(assignment.dueDate);
                 const challengeProgress = assignment.hasChallenge && assignment.challenge
-                  ? calculateChallengeProgress(assignment.challenge, menteeData?.trades || [])
+                  ? calculateChallengeProgress(assignment.challenge, studentData?.trades || [])
                   : null;
 
                 return (
@@ -10686,10 +11025,10 @@
                           </div>
                         )}
 
-                        {/* Mentee Notes Preview */}
-                        {assignment.menteeNotes && (
+                        {/* Student Notes Preview */}
+                        {assignment.studentNotes && (
                           <p className="text-sm text-gray-500 mt-2 truncate">
-                            💬 Mentee: "{assignment.menteeNotes}"
+                            💬 Student: "{assignment.studentNotes}"
                           </p>
                         )}
                       </div>
@@ -10942,7 +11281,7 @@
                       <div className="bg-gray-50 rounded-lg p-4">
                         <h4 className="text-sm font-medium text-gray-700 mb-2">Challenge Progress</h4>
                         {(() => {
-                          const progress = calculateChallengeProgress(viewingAssignment.challenge, menteeData?.trades || []);
+                          const progress = calculateChallengeProgress(viewingAssignment.challenge, studentData?.trades || []);
                           return (
                             <>
                               <p className="text-sm text-gray-600 mb-2">
@@ -10986,11 +11325,11 @@
                       </div>
                     )}
 
-                    {/* Mentee Notes */}
-                    {viewingAssignment.menteeNotes && (
+                    {/* Student Notes */}
+                    {viewingAssignment.studentNotes && (
                       <div className="bg-blue-50 rounded-lg p-4">
-                        <h4 className="text-sm font-medium text-blue-700 mb-1">Mentee's Notes</h4>
-                        <p className="text-blue-900 whitespace-pre-wrap">{viewingAssignment.menteeNotes}</p>
+                        <h4 className="text-sm font-medium text-blue-700 mb-1">Student's Notes</h4>
+                        <p className="text-blue-900 whitespace-pre-wrap">{viewingAssignment.studentNotes}</p>
                       </div>
                     )}
 
@@ -11035,8 +11374,8 @@
     // =============================================================================
     function MentorCheckinsTab({ 
       checkins, 
-      menteeData, 
-      selectedMentee,
+      studentData, 
+      selectedStudent,
       onCreateCheckin, 
       onDeleteCheckin,
       onCreateAssignment,
@@ -11073,15 +11412,15 @@
 
       // Calculate stats for selected week (including setups and mistakes)
       const weekStats = useMemo(() => {
-        if (!menteeData?.trades) return null;
+        if (!studentData?.trades) return null;
         return calculateWeekStats(
-          menteeData.trades, 
+          studentData.trades, 
           selectedWeek.start, 
           selectedWeek.end,
-          menteeData.setups || [],
-          menteeData.mistakes || []
+          studentData.setups || [],
+          studentData.mistakes || []
         );
-      }, [menteeData?.trades, menteeData?.setups, menteeData?.mistakes, selectedWeek]);
+      }, [studentData?.trades, studentData?.setups, studentData?.mistakes, selectedWeek]);
 
       const resetForm = () => {
         setFormData({
@@ -11149,7 +11488,7 @@
             <div>
               <h1 className="text-2xl font-bold text-gray-900">Weekly Check-ins</h1>
               <p className="text-sm text-gray-500 mt-1">
-                {checkins.length} check-in{checkins.length !== 1 ? 's' : ''} for {selectedMentee?.displayName}
+                {checkins.length} check-in{checkins.length !== 1 ? 's' : ''} for {selectedStudent?.displayName}
               </p>
             </div>
             <button
@@ -11510,10 +11849,10 @@
                                     })
                                     .map((trade, index) => {
                                       const setupName = trade.setupId 
-                                        ? (menteeData?.setups?.find(s => s.id === trade.setupId)?.name || '-')
+                                        ? (studentData?.setups?.find(s => s.id === trade.setupId)?.name || '-')
                                         : '-';
                                       const mistakeNames = trade.mistakeIds && trade.mistakeIds.length > 0
-                                        ? trade.mistakeIds.map(id => menteeData?.mistakes?.find(m => m.id === id)?.name || '').filter(Boolean).join(', ')
+                                        ? trade.mistakeIds.map(id => studentData?.mistakes?.find(m => m.id === id)?.name || '').filter(Boolean).join(', ')
                                         : '-';
                                       
                                       return (
@@ -11816,7 +12155,7 @@
     // =============================================================================
     function MentorSessionsTab({
       sessions,
-      selectedMentee,
+      selectedStudent,
       userProfile,
       onCreateSession,
       onUpdateStatus,
@@ -11926,7 +12265,7 @@
         <div className="space-y-6">
           {/* Header */}
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-gray-900">📅 Sessions with {selectedMentee?.displayName}</h2>
+            <h2 className="text-lg font-semibold text-gray-900">📅 Sessions with {selectedStudent?.displayName}</h2>
             <button
               onClick={() => setShowForm(!showForm)}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
@@ -12183,24 +12522,24 @@
     }
 
     // =============================================================================
-    // MENTEES PAGE (FOR MENTORS)
+    // STUDENTS PAGE (FOR MENTORS)
     // =============================================================================
-    function MenteesPage({ userProfile, isMobile }) {
-      const [mentees, setMentees] = useState([]);
+    function StudentsPage({ userProfile, isMobile }) {
+      const [students, setStudents] = useState([]);
       const [inviteEmail, setInviteEmail] = useState('');
       const [loading, setLoading] = useState(true);
       const [inviting, setInviting] = useState(false);
       const [error, setError] = useState('');
       const [success, setSuccess] = useState('');
-      const [selectedMentee, setSelectedMentee] = useState(null);
-      const [menteeData, setMenteeData] = useState(null);
-      const [loadingMenteeData, setLoadingMenteeData] = useState(false);
+      const [selectedStudent, setSelectedStudent] = useState(null);
+      const [studentData, setStudentData] = useState(null);
+      const [loadingStudentData, setLoadingStudentData] = useState(false);
       const [activeJournalTab, setActiveJournalTab] = useState('dashboard');
       const [selectedDate, setSelectedDate] = useState(todayISO());
       
       // Mentor dashboard state
       const [dashboardView, setDashboardView] = useState('dashboard'); // 'dashboard' or 'list'
-      const [allMenteeData, setAllMenteeData] = useState({}); // { menteeId: { trades, assignments, checkins } }
+      const [allStudentData, setAllStudentData] = useState({}); // { studentId: { trades, assignments, checkins } }
       const [loadingDashboard, setLoadingDashboard] = useState(true);
       
       // Feedback state
@@ -12233,46 +12572,46 @@
         { id: 'sessions', label: 'Sessions', icon: 'sessions' },
       ];
 
-      // Load mentees
+      // Load students
       useEffect(() => {
         if (!userProfile?.uid) return;
 
         const unsubscribe = db.collection('mentorships')
           .doc(userProfile.uid)
-          .collection('mentees')
+          .collection('students')
           .onSnapshot((snapshot) => {
-            const menteeList = snapshot.docs.map(doc => ({
+            const studentList = snapshot.docs.map(doc => ({
               id: doc.id,
               ...doc.data()
             }));
-            setMentees(menteeList);
+            setStudents(studentList);
             setLoading(false);
           });
 
         return () => unsubscribe();
       }, [userProfile?.uid]);
 
-      // Load all mentee data for dashboard view
+      // Load all student data for dashboard view
       useEffect(() => {
-        if (mentees.length === 0) {
+        if (students.length === 0) {
           setLoadingDashboard(false);
           return;
         }
 
         const unsubscribers = [];
 
-        mentees.forEach(mentee => {
-          // Subscribe to each mentee's journal data
+        students.forEach(student => {
+          // Subscribe to each student's journal data
           const unsubJournal = db.collection('users')
-            .doc(mentee.id)
+            .doc(student.id)
             .collection('journalData')
             .doc('state')
             .onSnapshot((doc) => {
               if (doc.exists) {
-                setAllMenteeData(prev => ({
+                setAllStudentData(prev => ({
                   ...prev,
-                  [mentee.id]: {
-                    ...prev[mentee.id],
+                  [student.id]: {
+                    ...prev[student.id],
                     trades: doc.data().trades || [],
                   }
                 }));
@@ -12282,13 +12621,13 @@
 
           // Subscribe to assignments
           const unsubAssignments = db.collection('users')
-            .doc(mentee.id)
+            .doc(student.id)
             .collection('assignments')
             .onSnapshot((snapshot) => {
-              setAllMenteeData(prev => ({
+              setAllStudentData(prev => ({
                 ...prev,
-                [mentee.id]: {
-                  ...prev[mentee.id],
+                [student.id]: {
+                  ...prev[student.id],
                   assignments: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
                 }
               }));
@@ -12297,14 +12636,14 @@
 
           // Subscribe to check-ins
           const unsubCheckins = db.collection('users')
-            .doc(mentee.id)
+            .doc(student.id)
             .collection('weeklyCheckins')
             .orderBy('weekStart', 'desc')
             .onSnapshot((snapshot) => {
-              setAllMenteeData(prev => ({
+              setAllStudentData(prev => ({
                 ...prev,
-                [mentee.id]: {
-                  ...prev[mentee.id],
+                [student.id]: {
+                  ...prev[student.id],
                   checkins: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
                 }
               }));
@@ -12313,15 +12652,15 @@
 
           // Subscribe to trade questions (with error handling)
           const unsubQuestions = db.collection('users')
-            .doc(mentee.id)
+            .doc(student.id)
             .collection('tradeQuestions')
             .orderBy('createdAt', 'desc')
             .onSnapshot(
               (snapshot) => {
-                setAllMenteeData(prev => ({
+                setAllStudentData(prev => ({
                   ...prev,
-                  [mentee.id]: {
-                    ...prev[mentee.id],
+                  [student.id]: {
+                    ...prev[student.id],
                     questions: snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })),
                   }
                 }));
@@ -12329,10 +12668,10 @@
               (error) => {
                 console.log('Trade questions subscription error (update Firestore rules):', error.message);
                 // Set empty questions array on error so it doesn't break the app
-                setAllMenteeData(prev => ({
+                setAllStudentData(prev => ({
                   ...prev,
-                  [mentee.id]: {
-                    ...prev[mentee.id],
+                  [student.id]: {
+                    ...prev[student.id],
                     questions: [],
                   }
                 }));
@@ -12346,11 +12685,11 @@
         return () => {
           unsubscribers.forEach(unsub => unsub());
         };
-      }, [mentees]);
+      }, [students]);
 
-      // Load feedback, assignments, and checkins when mentee selected
+      // Load feedback, assignments, and checkins when student selected
       useEffect(() => {
-        if (!selectedMentee?.id) {
+        if (!selectedStudent?.id) {
           setTradeFeedback([]);
           setTradeFlags([]);
           setAssignments([]);
@@ -12361,7 +12700,7 @@
 
         // Subscribe to feedback
         const unsubFeedback = db.collection('users')
-          .doc(selectedMentee.id)
+          .doc(selectedStudent.id)
           .collection('tradeFeedback')
           .orderBy('createdAt', 'desc')
           .onSnapshot((snapshot) => {
@@ -12370,7 +12709,7 @@
 
         // Subscribe to flags
         const unsubFlags = db.collection('users')
-          .doc(selectedMentee.id)
+          .doc(selectedStudent.id)
           .collection('tradeFlags')
           .onSnapshot((snapshot) => {
             setTradeFlags(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
@@ -12378,7 +12717,7 @@
 
         // Subscribe to assignments
         const unsubAssignments = db.collection('users')
-          .doc(selectedMentee.id)
+          .doc(selectedStudent.id)
           .collection('assignments')
           .orderBy('createdAt', 'desc')
           .onSnapshot((snapshot) => {
@@ -12387,7 +12726,7 @@
 
         // Subscribe to weekly check-ins
         const unsubCheckins = db.collection('users')
-          .doc(selectedMentee.id)
+          .doc(selectedStudent.id)
           .collection('weeklyCheckins')
           .orderBy('weekStart', 'desc')
           .onSnapshot((snapshot) => {
@@ -12396,7 +12735,7 @@
 
         // Subscribe to trade questions (with error handling)
         const unsubQuestions = db.collection('users')
-          .doc(selectedMentee.id)
+          .doc(selectedStudent.id)
           .collection('tradeQuestions')
           .orderBy('createdAt', 'desc')
           .onSnapshot(
@@ -12411,7 +12750,7 @@
 
         // Subscribe to sessions (with error handling)
         const unsubSessions = db.collection('users')
-          .doc(selectedMentee.id)
+          .doc(selectedStudent.id)
           .collection('sessions')
           .orderBy('dateTime', 'desc')
           .onSnapshot(
@@ -12432,13 +12771,13 @@
           unsubQuestions();
           unsubSessions();
         };
-      }, [selectedMentee?.id]);
+      }, [selectedStudent?.id]);
 
-      // Helper to create notification for mentee
-      const createNotification = async (menteeId, type, title, message, link = null) => {
+      // Helper to create notification for student
+      const createNotification = async (studentId, type, title, message, link = null) => {
         try {
           await db.collection('users')
-            .doc(menteeId)
+            .doc(studentId)
             .collection('notifications')
             .add({
               type,
@@ -12455,11 +12794,11 @@
 
       // Add feedback to a trade
       const addFeedback = async (tradeId, type, content) => {
-        if (!selectedMentee?.id || !content.trim()) return;
+        if (!selectedStudent?.id || !content.trim()) return;
 
         try {
           await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('tradeFeedback')
             .add({
               tradeId,
@@ -12473,7 +12812,7 @@
 
           // Create notification
           await createNotification(
-            selectedMentee.id,
+            selectedStudent.id,
             'feedback',
             `${userProfile.displayName} left feedback`,
             content.trim().substring(0, 100) + (content.length > 100 ? '...' : ''),
@@ -12489,7 +12828,7 @@
 
       // Add/update flag on a trade
       const addFlag = async (tradeId, flagType, note = '') => {
-        if (!selectedMentee?.id) return;
+        if (!selectedStudent?.id) return;
 
         try {
           // Check if flag already exists for this trade
@@ -12498,7 +12837,7 @@
           if (existingFlag) {
             // Update existing flag
             await db.collection('users')
-              .doc(selectedMentee.id)
+              .doc(selectedStudent.id)
               .collection('tradeFlags')
               .doc(existingFlag.id)
               .update({
@@ -12509,7 +12848,7 @@
           } else {
             // Create new flag
             await db.collection('users')
-              .doc(selectedMentee.id)
+              .doc(selectedStudent.id)
               .collection('tradeFlags')
               .add({
                 tradeId,
@@ -12524,7 +12863,7 @@
             // Create notification for new flag
             const flagLabels = { discuss: 'Let\'s Discuss', great: 'Great Trade!', risk: 'Risk Concern', violation: 'Rule Violation' };
             await createNotification(
-              selectedMentee.id,
+              selectedStudent.id,
               'flag',
               `${userProfile.displayName} flagged a trade`,
               `${flagLabels[flagType] || 'Flagged for review'}${note ? ': ' + note.substring(0, 50) : ''}`,
@@ -12540,13 +12879,13 @@
 
       // Remove flag from a trade
       const removeFlag = async (tradeId) => {
-        if (!selectedMentee?.id) return;
+        if (!selectedStudent?.id) return;
 
         try {
           const existingFlag = tradeFlags.find(f => f.tradeId === tradeId);
           if (existingFlag) {
             await db.collection('users')
-              .doc(selectedMentee.id)
+              .doc(selectedStudent.id)
               .collection('tradeFlags')
               .doc(existingFlag.id)
               .delete();
@@ -12560,13 +12899,13 @@
 
       // Resolve/reopen flag
       const toggleFlagStatus = async (tradeId) => {
-        if (!selectedMentee?.id) return;
+        if (!selectedStudent?.id) return;
 
         try {
           const existingFlag = tradeFlags.find(f => f.tradeId === tradeId);
           if (existingFlag) {
             await db.collection('users')
-              .doc(selectedMentee.id)
+              .doc(selectedStudent.id)
               .collection('tradeFlags')
               .doc(existingFlag.id)
               .update({
@@ -12583,11 +12922,11 @@
 
       // Answer a trade question (mentor)
       const answerQuestion = async (questionId, answer) => {
-        if (!selectedMentee?.id || !answer.trim()) return false;
+        if (!selectedStudent?.id || !answer.trim()) return false;
 
         try {
           await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('tradeQuestions')
             .doc(questionId)
             .update({
@@ -12600,7 +12939,7 @@
 
           // Create notification
           await createNotification(
-            selectedMentee.id,
+            selectedStudent.id,
             'question_answered',
             `${userProfile.displayName} answered your question`,
             answer.trim().substring(0, 100) + (answer.length > 100 ? '...' : ''),
@@ -12616,11 +12955,11 @@
 
       // Resolve a question
       const resolveQuestion = async (questionId) => {
-        if (!selectedMentee?.id) return false;
+        if (!selectedStudent?.id) return false;
 
         try {
           await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('tradeQuestions')
             .doc(questionId)
             .update({
@@ -12636,19 +12975,19 @@
 
       // Create a session (mentor)
       const createSession = async (sessionData) => {
-        if (!selectedMentee?.id) return false;
+        if (!selectedStudent?.id) return false;
 
         try {
           await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('sessions')
             .add({
               ...sessionData,
               scheduledBy: 'mentor',
               scheduledById: userProfile.uid,
               scheduledByName: userProfile.displayName,
-              menteeId: selectedMentee.id,
-              menteeName: selectedMentee.displayName,
+              studentId: selectedStudent.id,
+              studentName: selectedStudent.displayName,
               status: 'confirmed', // Mentor-created sessions are auto-confirmed
               notes: '',
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -12657,7 +12996,7 @@
           // Create notification
           const sessionDate = sessionData.dateTime?.toDate ? sessionData.dateTime.toDate() : new Date();
           await createNotification(
-            selectedMentee.id,
+            selectedStudent.id,
             'session',
             `${userProfile.displayName} scheduled a session`,
             `${sessionDate.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} - ${sessionData.topic}`,
@@ -12673,7 +13012,7 @@
 
       // Update session status
       const updateSessionStatus = async (sessionId, status, notes = null) => {
-        if (!selectedMentee?.id) return false;
+        if (!selectedStudent?.id) return false;
 
         try {
           const updateData = {
@@ -12688,7 +13027,7 @@
           }
           
           await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('sessions')
             .doc(sessionId)
             .update(updateData);
@@ -12701,11 +13040,11 @@
 
       // Delete session
       const deleteSession = async (sessionId) => {
-        if (!selectedMentee?.id) return false;
+        if (!selectedStudent?.id) return false;
 
         try {
           await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('sessions')
             .doc(sessionId)
             .delete();
@@ -12718,26 +13057,26 @@
 
       // Create assignment
       const createAssignment = async (assignmentData) => {
-        if (!selectedMentee?.id) return false;
+        if (!selectedStudent?.id) return false;
 
         try {
           // Create the assignment
           const assignmentRef = await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('assignments')
             .add({
               ...assignmentData,
               mentorId: userProfile.uid,
               mentorName: userProfile.displayName,
               status: 'assigned',
-              menteeNotes: '',
+              studentNotes: '',
               mentorReview: null,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
               updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
               completedAt: null,
             });
 
-          // If assignment has a challenge, also add it to the mentee's challenges in journalState
+          // If assignment has a challenge, also add it to the student's challenges in journalState
           if (assignmentData.hasChallenge && assignmentData.challenge) {
             const challengeTypeLabels = {
               profit: 'Profit Target',
@@ -12769,9 +13108,9 @@
               createdAt: nowISO(),
             };
 
-            // Get current mentee journalState and add the challenge
+            // Get current student journalState and add the challenge
             const stateDoc = await db.collection('users')
-              .doc(selectedMentee.id)
+              .doc(selectedStudent.id)
               .collection('journalData')
               .doc('state')
               .get();
@@ -12780,7 +13119,7 @@
             const updatedChallenges = [...(currentState.challenges || []), challenge];
 
             await db.collection('users')
-              .doc(selectedMentee.id)
+              .doc(selectedStudent.id)
               .collection('journalData')
               .doc('state')
               .set({
@@ -12791,7 +13130,7 @@
 
           // Create notification
           await createNotification(
-            selectedMentee.id,
+            selectedStudent.id,
             'assignment',
             `${userProfile.displayName} assigned you homework`,
             assignmentData.title + (assignmentData.hasChallenge ? ' (includes challenge)' : ''),
@@ -12807,11 +13146,11 @@
 
       // Update assignment (for mentor review)
       const updateAssignment = async (assignmentId, updates) => {
-        if (!selectedMentee?.id) return false;
+        if (!selectedStudent?.id) return false;
 
         try {
           await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('assignments')
             .doc(assignmentId)
             .update({
@@ -12822,7 +13161,7 @@
           // Create notification if mentor is reviewing
           if (updates.mentorReview) {
             await createNotification(
-              selectedMentee.id,
+              selectedStudent.id,
               'assignment_reviewed',
               `${userProfile.displayName} reviewed your assignment`,
               updates.mentorReview.feedback?.substring(0, 100) || 'Check your assignment for feedback',
@@ -12839,12 +13178,12 @@
 
       // Delete assignment
       const deleteAssignment = async (assignmentId) => {
-        if (!selectedMentee?.id) return false;
+        if (!selectedStudent?.id) return false;
 
         try {
           // First get the assignment to check if it has a linked challenge
           const assignmentDoc = await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('assignments')
             .doc(assignmentId)
             .get();
@@ -12853,7 +13192,7 @@
 
           // Delete the assignment
           await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('assignments')
             .doc(assignmentId)
             .delete();
@@ -12861,7 +13200,7 @@
           // If it had a challenge, also remove from journalState
           if (assignment?.hasChallenge) {
             const stateDoc = await db.collection('users')
-              .doc(selectedMentee.id)
+              .doc(selectedStudent.id)
               .collection('journalData')
               .doc('state')
               .get();
@@ -12873,7 +13212,7 @@
               );
 
               await db.collection('users')
-                .doc(selectedMentee.id)
+                .doc(selectedStudent.id)
                 .collection('journalData')
                 .doc('state')
                 .update({ challenges: updatedChallenges });
@@ -12889,7 +13228,7 @@
 
       // Create weekly check-in
       const createCheckin = async (checkinData) => {
-        if (!selectedMentee?.id) return false;
+        if (!selectedStudent?.id) return false;
 
         try {
           // Check if checkin for this week already exists
@@ -12898,7 +13237,7 @@
           if (existingCheckin) {
             // Update existing
             await db.collection('users')
-              .doc(selectedMentee.id)
+              .doc(selectedStudent.id)
               .collection('weeklyCheckins')
               .doc(existingCheckin.id)
               .update({
@@ -12908,7 +13247,7 @@
           } else {
             // Create new
             await db.collection('users')
-              .doc(selectedMentee.id)
+              .doc(selectedStudent.id)
               .collection('weeklyCheckins')
               .add({
                 ...checkinData,
@@ -12920,7 +13259,7 @@
 
             // Create notification for new check-in
             await createNotification(
-              selectedMentee.id,
+              selectedStudent.id,
               'checkin',
               `${userProfile.displayName} wrote your weekly check-in`,
               checkinData.focusForNextWeek ? `Focus: ${checkinData.focusForNextWeek.substring(0, 60)}...` : 'View your weekly review',
@@ -12936,11 +13275,11 @@
 
       // Delete weekly check-in
       const deleteCheckin = async (checkinId) => {
-        if (!selectedMentee?.id) return false;
+        if (!selectedStudent?.id) return false;
 
         try {
           await db.collection('users')
-            .doc(selectedMentee.id)
+            .doc(selectedStudent.id)
             .collection('weeklyCheckins')
             .doc(checkinId)
             .delete();
@@ -13050,53 +13389,53 @@
             return;
           }
 
-          const menteeDoc = usersSnapshot.docs[0];
-          const menteeUserData = menteeDoc.data();
+          const studentDoc = usersSnapshot.docs[0];
+          const studentUserData = studentDoc.data();
 
-          if (menteeUserData.role === 'mentor') {
+          if (studentUserData.role === 'mentor') {
             setError('That user is a mentor account, not a trader.');
             setInviting(false);
             return;
           }
 
-          if (menteeUserData.mentorId) {
+          if (studentUserData.mentorId) {
             setError('That trader already has a mentor connected.');
             setInviting(false);
             return;
           }
 
           // Check if already invited
-          const existingMentee = mentees.find(m => m.email === inviteEmail.toLowerCase().trim());
-          if (existingMentee) {
+          const existingStudent = students.find(m => m.email === inviteEmail.toLowerCase().trim());
+          if (existingStudent) {
             setError('You have already invited this trader.');
             setInviting(false);
             return;
           }
 
-          // Add to mentor's mentees
+          // Add to mentor's students
           await db.collection('mentorships')
             .doc(userProfile.uid)
-            .collection('mentees')
-            .doc(menteeDoc.id)
+            .collection('students')
+            .doc(studentDoc.id)
             .set({
-              email: menteeUserData.email,
-              displayName: menteeUserData.displayName,
+              email: studentUserData.email,
+              displayName: studentUserData.displayName,
               status: 'pending',
               invitedAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
 
-          // Update mentee's user doc with pending mentor
-          await db.collection('users').doc(menteeDoc.id).update({
+          // Update student's user doc with pending mentor
+          await db.collection('users').doc(studentDoc.id).update({
             pendingMentorId: userProfile.uid,
             pendingMentorName: userProfile.displayName,
             pendingMentorEmail: userProfile.email,
           });
 
-          // Send email notification to mentee
-          const emailData = emailTemplates.mentorInvite(userProfile.displayName, menteeUserData.email);
+          // Send email notification to student
+          const emailData = emailTemplates.mentorInvite(userProfile.displayName, studentUserData.email);
           await sendEmail(emailData);
 
-          setSuccess(`Invite sent to ${menteeUserData.displayName}!`);
+          setSuccess(`Invite sent to ${studentUserData.displayName}!`);
           setInviteEmail('');
         } catch (err) {
           console.error('Invite error:', err);
@@ -13106,51 +13445,51 @@
         }
       };
 
-      // Load mentee data when selected
-      const loadMenteeData = async (mentee) => {
-        if (mentee.status !== 'active') {
-          setError('This mentee has not accepted your invite yet.');
+      // Load student data when selected
+      const loadStudentData = async (student) => {
+        if (student.status !== 'active') {
+          setError('This student has not accepted your invite yet.');
           return;
         }
 
-        setLoadingMenteeData(true);
-        setSelectedMentee(mentee);
+        setLoadingStudentData(true);
+        setSelectedStudent(student);
         setActiveJournalTab('dashboard');
 
         try {
           const stateDoc = await db.collection('users')
-            .doc(mentee.id)
+            .doc(student.id)
             .collection('journalData')
             .doc('state')
             .get();
 
           if (stateDoc.exists) {
-            setMenteeData(stateDoc.data());
+            setStudentData(stateDoc.data());
           } else {
-            setMenteeData(EMPTY_STATE);
+            setStudentData(EMPTY_STATE);
           }
         } catch (err) {
-          console.error('Failed to load mentee data:', err);
-          setError('Failed to load mentee data.');
+          console.error('Failed to load student data:', err);
+          setError('Failed to load student data.');
         } finally {
-          setLoadingMenteeData(false);
+          setLoadingStudentData(false);
         }
       };
 
-      // Remove mentee
-      const removeMentee = async (menteeId) => {
-        if (!confirm('Are you sure you want to remove this mentee?')) return;
+      // Remove student
+      const removeStudent = async (studentId) => {
+        if (!confirm('Are you sure you want to remove this student?')) return;
 
         try {
           // Remove from mentor's list
           await db.collection('mentorships')
             .doc(userProfile.uid)
-            .collection('mentees')
-            .doc(menteeId)
+            .collection('students')
+            .doc(studentId)
             .delete();
 
-          // Update mentee's user doc
-          await db.collection('users').doc(menteeId).update({
+          // Update student's user doc
+          await db.collection('users').doc(studentId).update({
             mentorId: firebase.firestore.FieldValue.delete(),
             mentorName: firebase.firestore.FieldValue.delete(),
             pendingMentorId: firebase.firestore.FieldValue.delete(),
@@ -13158,20 +13497,20 @@
             pendingMentorEmail: firebase.firestore.FieldValue.delete(),
           });
 
-          if (selectedMentee?.id === menteeId) {
-            setSelectedMentee(null);
-            setMenteeData(null);
+          if (selectedStudent?.id === studentId) {
+            setSelectedStudent(null);
+            setStudentData(null);
           }
         } catch (err) {
-          console.error('Failed to remove mentee:', err);
-          setError('Failed to remove mentee.');
+          console.error('Failed to remove student:', err);
+          setError('Failed to remove student.');
         }
       };
 
-      // Back to mentee list
+      // Back to student list
       const handleBackToList = () => {
-        setSelectedMentee(null);
-        setMenteeData(null);
+        setSelectedStudent(null);
+        setStudentData(null);
         setActiveJournalTab('dashboard');
         setTradeFeedback([]);
         setTradeFlags([]);
@@ -13181,8 +13520,8 @@
       const currentWeek = getWeekBounds();
       
       const dashboardData = useMemo(() => {
-        const menteesNeedingCheckin = [];
-        const menteesNeedingAttention = [];
+        const studentsNeedingCheckin = [];
+        const studentsNeedingAttention = [];
         const completedAssignmentsToReview = [];
         const overdueAssignments = [];
         const pendingQuestions = [];
@@ -13193,8 +13532,8 @@
         let totalWinsThisWeek = 0;
         let totalClosedTradesThisWeek = 0;
 
-        mentees.forEach(mentee => {
-          const data = allMenteeData[mentee.id] || {};
+        students.forEach(student => {
+          const data = allStudentData[student.id] || {};
           const trades = data.trades || [];
           const assignments = data.assignments || [];
           const checkins = data.checkins || [];
@@ -13202,9 +13541,9 @@
 
           // Check if weekly check-in is needed for current week
           const hasCurrentWeekCheckin = checkins.some(c => c.weekStart === currentWeek.start);
-          if (!hasCurrentWeekCheckin && mentee.status === 'active') {
-            menteesNeedingCheckin.push({
-              ...mentee,
+          if (!hasCurrentWeekCheckin && student.status === 'active') {
+            studentsNeedingCheckin.push({
+              ...student,
               weekStats: calculateWeekStats(trades, currentWeek.start, currentWeek.end),
             });
           }
@@ -13213,13 +13552,13 @@
           questions.forEach(q => {
             if (q.status === 'asked') {
               pendingQuestions.push({
-                mentee,
+                student,
                 question: q,
               });
             }
           });
 
-          // Calculate this week's stats for this mentee
+          // Calculate this week's stats for this student
           const weekStats = calculateWeekStats(trades, currentWeek.start, currentWeek.end);
           totalTradesThisWeek += weekStats.totalTrades;
           totalPnLThisWeek += weekStats.totalPnL;
@@ -13241,9 +13580,9 @@
           });
           const redDays = Object.values(dailyPnL).filter(pnl => pnl < 0).length;
           if (redDays >= 2) {
-            menteesNeedingAttention.push({
+            studentsNeedingAttention.push({
               type: 'red_days',
-              mentee,
+              student,
               count: redDays,
               message: `had ${redDays} red days this week`,
             });
@@ -13254,7 +13593,7 @@
           assignments.forEach(a => {
             if (a.dueDate && a.dueDate < today && ['assigned', 'in_progress'].includes(a.status)) {
               overdueAssignments.push({
-                mentee,
+                student,
                 assignment: a,
               });
             }
@@ -13262,7 +13601,7 @@
             // Check for completed assignments awaiting review
             if (a.status === 'completed' && !a.mentorReview) {
               completedAssignmentsToReview.push({
-                mentee,
+                student,
                 assignment: a,
               });
             }
@@ -13271,7 +13610,7 @@
             if (a.completedAt) {
               recentActivity.push({
                 type: 'assignment_completed',
-                mentee,
+                student,
                 assignment: a,
                 timestamp: a.completedAt?.toDate?.() || new Date(),
                 message: `completed "${a.title}"`,
@@ -13279,7 +13618,7 @@
             }
           });
 
-          // Check if mentee hasn't traded in 5+ days
+          // Check if student hasn't traded in 5+ days
           if (trades.length > 0) {
             const sortedTrades = [...trades].sort((a, b) => 
               (b.exitDate || b.entryDate).localeCompare(a.exitDate || a.entryDate)
@@ -13288,9 +13627,9 @@
             if (lastTradeDate) {
               const daysSinceLastTrade = Math.floor((new Date() - new Date(lastTradeDate)) / (1000 * 60 * 60 * 24));
               if (daysSinceLastTrade >= 5) {
-                menteesNeedingAttention.push({
+                studentsNeedingAttention.push({
                   type: 'inactive',
-                  mentee,
+                  student,
                   days: daysSinceLastTrade,
                   message: `hasn't traded in ${daysSinceLastTrade} days`,
                 });
@@ -13300,10 +13639,10 @@
         });
 
         // Add overdue assignments to attention
-        overdueAssignments.forEach(({ mentee, assignment }) => {
-          menteesNeedingAttention.push({
+        overdueAssignments.forEach(({ student, assignment }) => {
+          studentsNeedingAttention.push({
             type: 'overdue',
-            mentee,
+            student,
             assignment,
             message: `has overdue assignment "${assignment.title}"`,
           });
@@ -13317,8 +13656,8 @@
           : 0;
 
         return {
-          menteesNeedingCheckin,
-          menteesNeedingAttention,
+          studentsNeedingCheckin,
+          studentsNeedingAttention,
           completedAssignmentsToReview,
           pendingQuestions,
           recentActivity: recentActivity.slice(0, 10),
@@ -13326,11 +13665,11 @@
           totalPnLThisWeek,
           avgWinRate,
         };
-      }, [mentees, allMenteeData, currentWeek.start, currentWeek.end]);
+      }, [students, allStudentData, currentWeek.start, currentWeek.end]);
 
-      // Helper to get mentee status
-      const getMenteeStatus = (menteeId) => {
-        const data = allMenteeData[menteeId] || {};
+      // Helper to get student status
+      const getStudentStatus = (studentId) => {
+        const data = allStudentData[studentId] || {};
         const trades = data.trades || [];
         const weekStats = calculateWeekStats(trades, currentWeek.start, currentWeek.end);
         
@@ -13342,7 +13681,7 @@
 
       // Render the active journal tab content
       const renderJournalContent = () => {
-        if (loadingMenteeData) {
+        if (loadingStudentData) {
           return (
             <div className="flex items-center justify-center h-64">
               <div className="text-center">
@@ -13353,7 +13692,7 @@
           );
         }
 
-        if (!menteeData) return null;
+        if (!studentData) return null;
 
         // Read-only setState that does nothing
         const readOnlySetState = () => {};
@@ -13362,7 +13701,7 @@
           case 'dashboard':
             return (
               <DashboardPage 
-                state={menteeData} 
+                state={studentData} 
                 setState={readOnlySetState}
                 setActivePage={() => {}}
                 setSelectedDate={setSelectedDate}
@@ -13373,7 +13712,7 @@
           case 'tradelog':
             return (
               <TradeLogPage 
-                state={menteeData} 
+                state={studentData} 
                 setState={readOnlySetState}
                 isMobile={isMobile}
                 isReadOnly={true}
@@ -13393,7 +13732,7 @@
           case 'calendar':
             return (
               <CalendarPage 
-                state={menteeData} 
+                state={studentData} 
                 setState={readOnlySetState}
                 selectedDate={selectedDate}
                 setSelectedDate={setSelectedDate}
@@ -13404,7 +13743,7 @@
           case 'goals':
             return (
               <GoalsPage 
-                state={menteeData} 
+                state={studentData} 
                 setState={readOnlySetState}
                 isMobile={isMobile}
                 isReadOnly={true}
@@ -13413,7 +13752,7 @@
           case 'setups':
             return (
               <SetupsPage 
-                state={menteeData} 
+                state={studentData} 
                 setState={readOnlySetState}
                 isMobile={isMobile}
                 isReadOnly={true}
@@ -13422,7 +13761,7 @@
           case 'mistakes':
             return (
               <MistakesPage 
-                state={menteeData} 
+                state={studentData} 
                 setState={readOnlySetState}
                 isMobile={isMobile}
                 isReadOnly={true}
@@ -13432,8 +13771,8 @@
             return (
               <MentorAssignmentsTab
                 assignments={assignments}
-                menteeData={menteeData}
-                selectedMentee={selectedMentee}
+                studentData={studentData}
+                selectedStudent={selectedStudent}
                 onCreateAssignment={createAssignment}
                 onUpdateAssignment={updateAssignment}
                 onDeleteAssignment={deleteAssignment}
@@ -13445,8 +13784,8 @@
             return (
               <MentorCheckinsTab
                 checkins={weeklyCheckins}
-                menteeData={menteeData}
-                selectedMentee={selectedMentee}
+                studentData={studentData}
+                selectedStudent={selectedStudent}
                 onCreateCheckin={createCheckin}
                 onDeleteCheckin={deleteCheckin}
                 onCreateAssignment={createAssignment}
@@ -13457,7 +13796,7 @@
             return (
               <MentorSessionsTab
                 sessions={sessions}
-                selectedMentee={selectedMentee}
+                selectedStudent={selectedStudent}
                 userProfile={userProfile}
                 onCreateSession={createSession}
                 onUpdateStatus={updateSessionStatus}
@@ -13470,8 +13809,8 @@
         }
       };
 
-      // If viewing a mentee's journal, show full journal view
-      if (selectedMentee) {
+      // If viewing a student's journal, show full journal view
+      if (selectedStudent) {
         return (
           <div className="space-y-4">
             {/* Header Bar */}
@@ -13485,17 +13824,17 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-5 h-5">
                     <path d="M19 12H5M12 19l-7-7 7-7" />
                   </svg>
-                  <span className="hidden sm:inline">Back to Mentees</span>
+                  <span className="hidden sm:inline">Back to Students</span>
                 </button>
 
-                {/* Mentee Info */}
+                {/* Student Info */}
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold text-blue-600">
-                    {selectedMentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                    {selectedStudent.displayName?.charAt(0)?.toUpperCase() || '?'}
                   </div>
                   <div>
-                    <h2 className="font-semibold text-gray-900">{selectedMentee.displayName}'s Journal</h2>
-                    <p className="text-xs text-gray-500">{selectedMentee.email}</p>
+                    <h2 className="font-semibold text-gray-900">{selectedStudent.displayName}'s Journal</h2>
+                    <p className="text-xs text-gray-500">{selectedStudent.email}</p>
                   </div>
                 </div>
 
@@ -13537,17 +13876,17 @@
         );
       }
 
-      // Mentee List/Dashboard View
+      // Student List/Dashboard View
       return (
         <div className="space-y-6">
           {/* Header with View Toggle */}
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
-                {dashboardView === 'dashboard' ? 'Mentor Dashboard' : 'My Mentees'}
+                {dashboardView === 'dashboard' ? 'Mentor Dashboard' : 'My Students'}
               </h1>
               <p className="text-sm text-gray-500 mt-1">
-                {mentees.length} mentee{mentees.length !== 1 ? 's' : ''} • Week of {formatWeekRange(currentWeek.start, currentWeek.end)}
+                {students.length} student{students.length !== 1 ? 's' : ''} • Week of {formatWeekRange(currentWeek.start, currentWeek.end)}
               </p>
             </div>
             <div className="flex items-center gap-2 bg-gray-100 rounded-lg p-1">
@@ -13579,8 +13918,8 @@
               {/* Stats Cards */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-                  <p className="text-sm text-gray-500">Mentees</p>
-                  <p className="text-2xl font-bold text-gray-900">{mentees.length}</p>
+                  <p className="text-sm text-gray-500">Students</p>
+                  <p className="text-2xl font-bold text-gray-900">{students.length}</p>
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                   <p className="text-sm text-gray-500">Week P&L</p>
@@ -13594,40 +13933,40 @@
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
                   <p className="text-sm text-gray-500">Need Attention</p>
-                  <p className="text-2xl font-bold text-orange-600">{dashboardData.menteesNeedingAttention.length}</p>
+                  <p className="text-2xl font-bold text-orange-600">{dashboardData.studentsNeedingAttention.length}</p>
                 </div>
               </div>
 
               {/* Weekly Check-in Alerts */}
-              {dashboardData.menteesNeedingCheckin.length > 0 && (
+              {dashboardData.studentsNeedingCheckin.length > 0 && (
                 <div className="bg-gradient-to-r from-blue-500 to-indigo-500 rounded-xl p-4 text-white">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-xl">📅</span>
                     <h2 className="font-semibold">Weekly Check-ins Due</h2>
                     <span className="ml-auto bg-white/20 px-2 py-0.5 rounded-full text-sm">
-                      {dashboardData.menteesNeedingCheckin.length} pending
+                      {dashboardData.studentsNeedingCheckin.length} pending
                     </span>
                   </div>
                   <div className="space-y-2">
-                    {dashboardData.menteesNeedingCheckin.map(mentee => (
+                    {dashboardData.studentsNeedingCheckin.map(student => (
                       <div 
-                        key={mentee.id}
+                        key={student.id}
                         className="bg-white/10 rounded-lg p-3 flex items-center justify-between"
                       >
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 bg-white/20 rounded-full flex items-center justify-center font-bold">
-                            {mentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                            {student.displayName?.charAt(0)?.toUpperCase() || '?'}
                           </div>
                           <div>
-                            <p className="font-medium">{mentee.displayName}</p>
+                            <p className="font-medium">{student.displayName}</p>
                             <p className="text-sm text-blue-100">
-                              {mentee.weekStats?.totalTrades || 0} trades • {formatCurrency(mentee.weekStats?.totalPnL || 0)}
+                              {student.weekStats?.totalTrades || 0} trades • {formatCurrency(student.weekStats?.totalPnL || 0)}
                             </p>
                           </div>
                         </div>
                         <button
                           onClick={() => {
-                            loadMenteeData(mentee);
+                            loadStudentData(student);
                             setActiveJournalTab('checkins');
                           }}
                           className="px-3 py-1.5 bg-white text-blue-600 rounded-lg text-sm font-medium hover:bg-blue-50"
@@ -13651,15 +13990,15 @@
                     </span>
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {dashboardData.completedAssignmentsToReview.map(({ mentee, assignment }) => (
+                    {dashboardData.completedAssignmentsToReview.map(({ student, assignment }) => (
                       <div key={assignment.id} className="px-6 py-3 flex items-center justify-between hover:bg-gray-50">
                         <div>
                           <p className="font-medium text-gray-900">{assignment.title}</p>
-                          <p className="text-sm text-gray-500">Completed by {mentee.displayName}</p>
+                          <p className="text-sm text-gray-500">Completed by {student.displayName}</p>
                         </div>
                         <button
                           onClick={() => {
-                            loadMenteeData(mentee);
+                            loadStudentData(student);
                             setActiveJournalTab('assignments');
                           }}
                           className="px-3 py-1.5 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700"
@@ -13683,12 +14022,12 @@
                     </span>
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {dashboardData.pendingQuestions.map(({ mentee, question }) => (
+                    {dashboardData.pendingQuestions.map(({ student, question }) => (
                       <div key={question.id} className="px-6 py-3 hover:bg-gray-50">
                         <div className="flex items-start justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-1">
-                              <p className="font-medium text-gray-900">{mentee.displayName}</p>
+                              <p className="font-medium text-gray-900">{student.displayName}</p>
                               <span className="text-xs bg-purple-100 text-purple-600 px-2 py-0.5 rounded">
                                 {question.questionType === 'entry' ? 'Entry' :
                                  question.questionType === 'exit' ? 'Exit' :
@@ -13702,7 +14041,7 @@
                           </div>
                           <button
                             onClick={() => {
-                              loadMenteeData(mentee);
+                              loadStudentData(student);
                               setActiveJournalTab('tradelog');
                             }}
                             className="ml-4 px-3 py-1.5 bg-purple-600 text-white rounded-lg text-sm font-medium hover:bg-purple-700"
@@ -13717,14 +14056,14 @@
               )}
 
               {/* Needs Attention */}
-              {dashboardData.menteesNeedingAttention.length > 0 && (
+              {dashboardData.studentsNeedingAttention.length > 0 && (
                 <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                   <div className="px-6 py-4 border-b border-gray-200 flex items-center gap-2">
                     <span className="text-lg">⚠️</span>
                     <h2 className="font-semibold text-gray-900">Needs Attention</h2>
                   </div>
                   <div className="divide-y divide-gray-100">
-                    {dashboardData.menteesNeedingAttention.map((alert, idx) => (
+                    {dashboardData.studentsNeedingAttention.map((alert, idx) => (
                       <div key={idx} className="px-6 py-3 flex items-center justify-between hover:bg-gray-50">
                         <div className="flex items-center gap-3">
                           <span className={`text-lg ${
@@ -13734,12 +14073,12 @@
                             {alert.type === 'red_days' ? '🔴' : alert.type === 'overdue' ? '📋' : '💤'}
                           </span>
                           <div>
-                            <p className="font-medium text-gray-900">{alert.mentee.displayName}</p>
+                            <p className="font-medium text-gray-900">{alert.student.displayName}</p>
                             <p className="text-sm text-gray-500">{alert.message}</p>
                           </div>
                         </div>
                         <button
-                          onClick={() => loadMenteeData(alert.mentee)}
+                          onClick={() => loadStudentData(alert.student)}
                           className="px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-200"
                         >
                           View
@@ -13750,19 +14089,19 @@
                 </div>
               )}
 
-              {/* Mentee Performance Table */}
+              {/* Student Performance Table */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="font-semibold text-gray-900">📊 Mentee Performance This Week</h2>
+                  <h2 className="font-semibold text-gray-900">📊 Student Performance This Week</h2>
                 </div>
-                {mentees.length === 0 ? (
-                  <div className="p-8 text-center text-gray-500">No mentees yet</div>
+                {students.length === 0 ? (
+                  <div className="p-8 text-center text-gray-500">No students yet</div>
                 ) : (
                   <div className="overflow-x-auto">
                     <table className="w-full">
                       <thead className="bg-gray-50">
                         <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Mentee</th>
+                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Student</th>
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Trades</th>
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">Win Rate</th>
                           <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase">P&L</th>
@@ -13771,19 +14110,19 @@
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {mentees.filter(m => m.status === 'active').map(mentee => {
-                          const data = allMenteeData[mentee.id] || {};
+                        {students.filter(m => m.status === 'active').map(student => {
+                          const data = allStudentData[student.id] || {};
                           const weekStats = calculateWeekStats(data.trades || [], currentWeek.start, currentWeek.end);
-                          const status = getMenteeStatus(mentee.id);
+                          const status = getStudentStatus(student.id);
                           
                           return (
-                            <tr key={mentee.id} className="hover:bg-gray-50">
+                            <tr key={student.id} className="hover:bg-gray-50">
                               <td className="px-6 py-4">
                                 <div className="flex items-center gap-3">
                                   <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-sm font-bold text-blue-600">
-                                    {mentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                                    {student.displayName?.charAt(0)?.toUpperCase() || '?'}
                                   </div>
-                                  <span className="font-medium text-gray-900">{mentee.displayName}</span>
+                                  <span className="font-medium text-gray-900">{student.displayName}</span>
                                 </div>
                               </td>
                               <td className="px-6 py-4 text-center text-gray-900">{weekStats.totalTrades}</td>
@@ -13804,7 +14143,7 @@
                               </td>
                               <td className="px-6 py-4 text-right">
                                 <button
-                                  onClick={() => loadMenteeData(mentee)}
+                                  onClick={() => loadStudentData(student)}
                                   className="text-blue-600 hover:text-blue-700 font-medium text-sm"
                                 >
                                   View →
@@ -13832,7 +14171,7 @@
                           {activity.type === 'assignment_completed' ? '✅' : '📌'}
                         </span>
                         <div className="flex-1">
-                          <span className="font-medium text-gray-900">{activity.mentee.displayName}</span>
+                          <span className="font-medium text-gray-900">{activity.student.displayName}</span>
                           <span className="text-gray-600"> {activity.message}</span>
                         </div>
                         <span className="text-sm text-gray-400">
@@ -13881,36 +14220,36 @@
                 </form>
               </div>
 
-              {/* Mentees List */}
+              {/* Students List */}
               <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div className="px-6 py-4 border-b border-gray-200">
-                  <h2 className="font-semibold text-gray-900">Your Mentees ({mentees.length})</h2>
+                  <h2 className="font-semibold text-gray-900">Your Students ({students.length})</h2>
                 </div>
 
                 {loading ? (
                   <div className="p-8 text-center text-gray-500">Loading...</div>
-                ) : mentees.length === 0 ? (
+                ) : students.length === 0 ? (
                   <div className="p-12 text-center">
                     <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl">
                       👥
                     </div>
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">No mentees yet</h3>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No students yet</h3>
                     <p className="text-gray-500">Invite traders to start mentoring them</p>
                   </div>
                 ) : (
                   <div className="divide-y divide-gray-200">
-                    {mentees.map(mentee => {
-                      const isActive = mentee.status === 'active';
+                    {students.map(student => {
+                      const isActive = student.status === 'active';
                       return (
-                        <div key={mentee.id} className="px-6 py-4 hover:bg-gray-50">
+                        <div key={student.id} className="px-6 py-4 hover:bg-gray-50">
                           <div className="flex items-center justify-between">
                             <div className="flex items-center gap-4">
                               <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center text-lg font-bold text-blue-600">
-                                {mentee.displayName?.charAt(0)?.toUpperCase() || '?'}
+                                {student.displayName?.charAt(0)?.toUpperCase() || '?'}
                               </div>
                               <div>
-                                <h3 className="font-medium text-gray-900">{mentee.displayName}</h3>
-                                <p className="text-sm text-gray-500">{mentee.email}</p>
+                                <h3 className="font-medium text-gray-900">{student.displayName}</h3>
+                                <p className="text-sm text-gray-500">{student.email}</p>
                               </div>
                               <span className={`px-2 py-1 text-xs rounded-full font-medium ${
                                 isActive 
@@ -13923,7 +14262,7 @@
                             <div className="flex items-center gap-2">
                               {isActive && (
                                 <button
-                                  onClick={() => loadMenteeData(mentee)}
+                                  onClick={() => loadStudentData(student)}
                                   className="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 font-medium flex items-center gap-2"
                                 >
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="w-4 h-4">
@@ -13934,9 +14273,9 @@
                                 </button>
                               )}
                               <button
-                                onClick={() => removeMentee(mentee.id)}
+                                onClick={() => removeStudent(student.id)}
                                 className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg"
-                                title="Remove mentee"
+                                title="Remove student"
                               >
                                 {Icons.trash}
                               </button>
@@ -13974,10 +14313,10 @@
               pendingMentorEmail: firebase.firestore.FieldValue.delete(),
             });
 
-            // Update mentor's mentee record
+            // Update mentor's student record
             await db.collection('mentorships')
               .doc(userProfile.pendingMentorId)
-              .collection('mentees')
+              .collection('students')
               .doc(userProfile.uid)
               .update({
                 status: 'active',
@@ -13996,9 +14335,9 @@
                 type: 'invite_accepted',
                 title: `${userProfile.displayName} accepted your invitation!`,
                 message: 'You can now view their trades and provide feedback.',
-                link: 'mentees',
+                link: 'students',
                 read: false,
-                menteeId: userProfile.uid,
+                studentId: userProfile.uid,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
               });
           } else {
@@ -14012,7 +14351,7 @@
             // Remove from mentor's list
             await db.collection('mentorships')
               .doc(userProfile.pendingMentorId)
-              .collection('mentees')
+              .collection('students')
               .doc(userProfile.uid)
               .delete();
           }
@@ -14073,23 +14412,23 @@
       const [isMobile, setIsMobile] = useState(false);
       const [dataLoading, setDataLoading] = useState(true);
       
-      // Feedback state for mentees
+      // Feedback state for students
       const [myTradeFeedback, setMyTradeFeedback] = useState([]);
       const [myTradeFlags, setMyTradeFlags] = useState([]);
       
-      // Trade Questions state for mentees
+      // Trade Questions state for students
       const [myTradeQuestions, setMyTradeQuestions] = useState([]);
       
-      // Assignments state for mentees
+      // Assignments state for students
       const [myAssignments, setMyAssignments] = useState([]);
       
-      // Check-ins state for mentees
+      // Check-ins state for students
       const [myCheckins, setMyCheckins] = useState([]);
       
-      // Sessions state for mentees
+      // Sessions state for students
       const [mySessions, setMySessions] = useState([]);
       
-      // Notifications state for mentees
+      // Notifications state for students
       const [notifications, setNotifications] = useState([]);
 
       // Listen for auth state changes
@@ -14113,7 +14452,7 @@
         return () => unsubscribe();
       }, []);
 
-      // Load feedback, assignments, and check-ins for mentees (users with a mentor)
+      // Load feedback, assignments, and check-ins for students (users with a mentor)
       useEffect(() => {
         if (!user || !userProfile?.mentorId) {
           setMyTradeFeedback([]);
@@ -14200,7 +14539,7 @@
         };
       }, [user, userProfile?.mentorId]);
 
-      // Load notifications for ALL users (mentors and mentees)
+      // Load notifications for ALL users (mentors and students)
       useEffect(() => {
         if (!user) {
           setNotifications([]);
@@ -14225,7 +14564,7 @@
         return () => unsubNotifications();
       }, [user]);
 
-      // Update assignment (for mentee)
+      // Update assignment (for student)
       const updateMyAssignment = async (assignmentId, updates) => {
         if (!user) return false;
 
@@ -14248,7 +14587,7 @@
               updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
 
-          // Notify mentor if mentee completed the assignment
+          // Notify mentor if student completed the assignment
           if (updates.status === 'completed' && assignment?.mentorId) {
             await db.collection('users')
               .doc(assignment.mentorId)
@@ -14257,9 +14596,9 @@
                 type: 'assignment_completed',
                 title: `${userProfile?.displayName} completed an assignment`,
                 message: assignment.title || 'Assignment completed and ready for review',
-                link: 'mentees',
+                link: 'students',
                 read: false,
-                menteeId: user.uid,
+                studentId: user.uid,
                 createdAt: firebase.firestore.FieldValue.serverTimestamp(),
               });
           }
@@ -14271,7 +14610,7 @@
         }
       };
 
-      // Mark feedback as read when mentee views it
+      // Mark feedback as read when student views it
       const markFeedbackAsRead = async (feedbackIds) => {
         if (!user || !feedbackIds.length) return;
         
@@ -14288,7 +14627,7 @@
         }
       };
 
-      // Ask mentor a question about a trade (mentee)
+      // Ask mentor a question about a trade (student)
       const askQuestion = async (tradeId, questionType, question) => {
         if (!user || !userProfile?.mentorId || !question.trim()) return false;
 
@@ -14298,8 +14637,8 @@
             .collection('tradeQuestions')
             .add({
               tradeId,
-              menteeId: user.uid,
-              menteeName: userProfile.displayName,
+              studentId: user.uid,
+              studentName: userProfile.displayName,
               mentorId: userProfile.mentorId,
               questionType,
               question: question.trim(),
@@ -14318,9 +14657,9 @@
               type: 'question_asked',
               title: `${userProfile.displayName} asked a question`,
               message: `${questionTypeLabels[questionType] || 'Question'}: ${question.trim().substring(0, 80)}...`,
-              link: 'mentees',
+              link: 'students',
               read: false,
-              menteeId: user.uid,
+              studentId: user.uid,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
 
@@ -14331,7 +14670,7 @@
         }
       };
 
-      // Resolve a question (both mentor and mentee can do this after answered)
+      // Resolve a question (both mentor and student can do this after answered)
       const resolveMyQuestion = async (questionId) => {
         if (!user) return false;
 
@@ -14441,11 +14780,11 @@
           // Mentor notifications
           case 'question_asked':
           case 'assignment_completed':
-          case 'mentee_daily_target':
-          case 'mentee_challenge_complete':
-          case 'mentee_milestone':
+          case 'student_daily_target':
+          case 'student_challenge_complete':
+          case 'student_milestone':
           case 'invite_accepted':
-            setActivePage('mentees');
+            setActivePage('students');
             break;
           
           default:
@@ -14503,14 +14842,14 @@
         }
       };
 
-      // Helper to notify mentor about mentee's achievement
+      // Helper to notify mentor about student's achievement
       const notifyMentorOfProgress = async (type, title, message) => {
         if (!userProfile?.mentorId) return;
         try {
           await db.collection('users').doc(userProfile.mentorId).collection('notifications').add({
             type, title, message,
-            link: 'mentees',
-            menteeId: user.uid,
+            link: 'students',
+            studentId: user.uid,
             read: false,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
           });
@@ -14554,9 +14893,9 @@
             await createSelfNotification('daily_target_hit', '🎯 Daily Target Hit!', 
               `You made $${todayPnL.toFixed(0)} today (target: $${dailyTarget.toFixed(0)})`);
             
-            // Notify mentor if mentee
+            // Notify mentor if student
             if (userProfile.mentorId) {
-              await notifyMentorOfProgress('mentee_daily_target', 
+              await notifyMentorOfProgress('student_daily_target', 
                 `🎯 ${userProfile.displayName} hit daily target`,
                 `Made $${todayPnL.toFixed(0)} today`);
             }
@@ -14618,7 +14957,7 @@
               `Congratulations! You've logged ${milestone} trades.`, 'tradelog');
             
             if (userProfile.mentorId) {
-              await notifyMentorOfProgress('mentee_milestone', 
+              await notifyMentorOfProgress('student_milestone', 
                 `🎉 ${userProfile.displayName} reached ${milestone} trades`,
                 `Milestone: ${milestone} trades logged`);
             }
@@ -14678,7 +15017,7 @@
                   `You completed: ${challenge.name}`, 'goals');
                 
                 if (userProfile.mentorId) {
-                  await notifyMentorOfProgress('mentee_challenge_complete', 
+                  await notifyMentorOfProgress('student_challenge_complete', 
                     `🏅 ${userProfile.displayName} completed a challenge`,
                     challenge.name);
                 }
@@ -14875,7 +15214,7 @@
       const getNavItems = () => {
         let items = [...NAV_ITEMS];
         
-        // Add Assignments, Check-ins, and Sessions for mentees (users with a mentor)
+        // Add Assignments, Check-ins, and Sessions for students (users with a mentor)
         if (userProfile?.mentorId) {
           // Insert after Goals
           const goalsIndex = items.findIndex(i => i.id === 'goals');
@@ -14886,9 +15225,9 @@
           );
         }
         
-        // Add Mentees for mentors
+        // Add Students for mentors
         if (userProfile?.role === 'mentor') {
-          items.push({ id: 'mentees', label: 'Mentees', icon: 'mentees' });
+          items.push({ id: 'students', label: 'Mentor Dashboard', icon: 'students' });
         }
         
         return items;
@@ -14922,8 +15261,8 @@
             return <>{inviteBanner}<MistakesPage state={journalState} setState={saveJournalState} isMobile={isMobile} /></>;
           case 'profile':
             return <>{inviteBanner}<ProfilePage state={journalState} setState={saveJournalState} isMobile={isMobile} userProfile={userProfile} onSignOut={handleSignOut} onUpdate={reloadProfile} /></>;
-          case 'mentees':
-            return <MenteesPage userProfile={userProfile} isMobile={isMobile} />;
+          case 'students':
+            return <StudentsPage userProfile={userProfile} isMobile={isMobile} />;
           default:
             return <>{inviteBanner}<DashboardPage state={journalState} setState={saveJournalState} isMobile={isMobile} /></>;
         }
@@ -14944,7 +15283,7 @@
               onMarkAllAsRead={markAllNotificationsAsRead}
               onNotificationClick={handleNotificationClick}
             />
-            <main className={`pt-14 min-h-screen transition-all duration-300 ease-in-out ${isMobile ? 'pb-20' : (sidebarExpanded ? 'pl-56' : 'pl-16')}`}>
+            <main className={`pt-14 min-h-screen transition-all duration-300 ease-in-out ${isMobile ? 'mobile-content-padding' : (sidebarExpanded ? 'pl-56' : 'pl-16')}`}>
               <div className={`${isMobile ? 'p-3' : 'p-6'}`}>{renderPage()}</div>
             </main>
             {isMobile && <Sidebar isExpanded={false} setIsExpanded={() => {}} activePage={activePage} setActivePage={setActivePage} isMobile={true} navItems={navItems} />}
