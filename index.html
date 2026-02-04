@@ -9718,7 +9718,9 @@
           const userDoc = await db.collection('users').doc(user.uid).get();
           const userData = userDoc.data();
           
-          if (!userData?.emailVerified) {
+          // Skip verification check for existing users (if emailVerified field doesn't exist or is true)
+          // Only block if emailVerified is explicitly set to false (new signups)
+          if (userData?.emailVerified === false) {
             await auth.signOut();
             setError('Your email has not been verified. Please check your inbox for the verification code you received when you signed up.');
             return;
