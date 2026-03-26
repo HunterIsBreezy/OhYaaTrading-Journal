@@ -83,13 +83,11 @@ export default function App() {
     return () => unsub();
   }, [user]);
 
-  // Helper: get trade chunk key (e.g. "trades-2026-03-w1") from a trade's entryDate
+  // Helper: get trade chunk key (e.g. "trades-2026-03-22") from a trade's entryDate — one doc per day
   const getTradeChunkKey = (trade) => {
     const d = trade.entryDate || '';
-    const match = d.match(/^(\d{4}-\d{2})-(\d{2})/);
-    if (!match) return 'trades-unknown';
-    const week = Math.ceil(parseInt(match[2]) / 7); // w1=1-7, w2=8-14, w3=15-21, w4=22-28, w5=29-31
-    return `trades-${match[1]}-w${week}`;
+    const match = d.match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? `trades-${match[1]}` : 'trades-unknown';
   };
 
   // Group trades by month chunk
@@ -106,6 +104,7 @@ export default function App() {
   // Migrate old formats: state doc trades → chunks, monthly chunks → weekly chunks
   const migrateIfNeeded = async (uid) => {
     const journalRef = db.collection('users').doc(uid).collection('journalData');
+    const screenshotRef = db.collection('users').doc(uid).collection('screenshots');
     const snapshot = await journalRef.get();
     const batch = db.batch();
     let migrated = false;
@@ -124,25 +123,48 @@ export default function App() {
         migrated = true;
       }
 
-      // Migrate old monthly chunks (e.g. "trades-2026-03") → weekly chunks
-      if (doc.id.match(/^trades-\d{4}-\d{2}$/) && data.trades && data.trades.length > 0) {
-        const chunks = groupTradesByChunk(data.trades);
+      // Migrate old monthly/weekly chunks → daily chunks + extract screenshots
+      if (doc.id.match(/^trades-\d{4}-\d{2}(-w\d)?$/) && data.trades && data.trades.length > 0) {
+        const migratedTrades = data.trades.map(t => {
+          if (t.screenshot && t.screenshot !== '__stored__') {
+            batch.set(screenshotRef.doc(t.id), { data: t.screenshot });
+            return { ...t, screenshot: '__stored__' };
+          }
+          return t;
+        });
+        const chunks = groupTradesByChunk(migratedTrades);
         Object.entries(chunks).forEach(([key, trades]) => {
           batch.set(journalRef.doc(key), { trades: sanitizeForFirestore(trades) });
         });
-        batch.delete(journalRef.doc(doc.id)); // Remove old monthly doc
+        batch.delete(journalRef.doc(doc.id));
         migrated = true;
+      }
+
+      // Extract screenshots from daily chunks that still have inline data
+      if (doc.id.match(/^trades-\d{4}-\d{2}-\d{2}$/) && data.trades && data.trades.length > 0) {
+        const hasInline = data.trades.some(t => t.screenshot && t.screenshot !== '__stored__');
+        if (hasInline) {
+          const migratedTrades = data.trades.map(t => {
+            if (t.screenshot && t.screenshot !== '__stored__') {
+              batch.set(screenshotRef.doc(t.id), { data: t.screenshot });
+              return { ...t, screenshot: '__stored__' };
+            }
+            return t;
+          });
+          batch.set(journalRef.doc(doc.id), { trades: sanitizeForFirestore(migratedTrades) });
+          migrated = true;
+        }
       }
     });
 
     if (migrated) {
       await batch.commit();
-      console.log('Migrated trades to weekly chunks');
+      console.log('Migrated trades to daily chunks with separate screenshots');
     }
     return migrated;
   };
 
-  // Load all journal data from chunked documents
+  // Load all journal data from chunked documents + screenshots
   const loadJournalData = async (uid) => {
     const snapshot = await db.collection('users').doc(uid).collection('journalData').get();
     let allTrades = [];
@@ -162,6 +184,15 @@ export default function App() {
         allTrades = allTrades.concat(data.trades || []);
       }
     });
+
+    // Load screenshots and reattach to trades
+    const tradeIdsWithScreenshots = allTrades.filter(t => t.screenshot === '__stored__').map(t => t.id);
+    if (tradeIdsWithScreenshots.length > 0) {
+      const screenshotSnap = await db.collection('users').doc(uid).collection('screenshots').get();
+      const screenshotMap = {};
+      screenshotSnap.forEach(doc => { screenshotMap[doc.id] = doc.data().data; });
+      allTrades = allTrades.map(t => t.screenshot === '__stored__' && screenshotMap[t.id] ? { ...t, screenshot: screenshotMap[t.id] } : t);
+    }
 
     return { trades: allTrades, ...meta };
   };
@@ -187,19 +218,28 @@ export default function App() {
 
     // Listen for realtime changes on the whole collection
     const unsub = db.collection('users').doc(user.uid).collection('journalData').onSnapshot(
-      snapshot => {
+      async snapshot => {
         let allTrades = [];
         let meta = { setups: [], mistakes: [], dailyNotes: {}, yearlyGoal: null, challenges: [] };
         snapshot.forEach(doc => {
           const data = doc.data();
           if (doc.id === 'state') {
             meta = { setups: data.setups || [], mistakes: data.mistakes || [], dailyNotes: data.dailyNotes || {}, yearlyGoal: data.yearlyGoal || null, challenges: data.challenges || [] };
-            // If state still has trades (pre-migration snapshot), include them
             if (data.trades && data.trades.length > 0) allTrades = allTrades.concat(data.trades);
           } else if (doc.id.startsWith('trades-')) {
             allTrades = allTrades.concat(data.trades || []);
           }
         });
+        // Reattach screenshots from separate collection
+        const needScreenshots = allTrades.filter(t => t.screenshot === '__stored__');
+        if (needScreenshots.length > 0) {
+          try {
+            const screenshotSnap = await db.collection('users').doc(user.uid).collection('screenshots').get();
+            const screenshotMap = {};
+            screenshotSnap.forEach(doc => { screenshotMap[doc.id] = doc.data().data; });
+            allTrades = allTrades.map(t => t.screenshot === '__stored__' && screenshotMap[t.id] ? { ...t, screenshot: screenshotMap[t.id] } : t);
+          } catch (e) { console.error('Failed to load screenshots:', e); }
+        }
         setJournalState({ trades: allTrades, ...meta });
         setDataLoading(false);
       },
@@ -282,21 +322,36 @@ export default function App() {
     try {
       const batch = db.batch();
       const journalRef = db.collection('users').doc(user.uid).collection('journalData');
+      const screenshotRef = db.collection('users').doc(user.uid).collection('screenshots');
 
       // Save non-trade data to state doc (no trades — keeps it small)
       const { trades, ...meta } = newState;
       batch.set(journalRef.doc('state'), sanitizeForFirestore(meta), { merge: true });
 
-      // Save trades in monthly chunks
-      const newChunks = groupTradesByChunk(trades || []);
-      const oldChunks = groupTradesByChunk(oldState?.trades || []);
+      // Save/update screenshots separately, strip from trade data
+      const tradesForStorage = (trades || []).map(t => {
+        if (t.screenshot) {
+          batch.set(screenshotRef.doc(t.id), { data: t.screenshot });
+          return { ...t, screenshot: '__stored__' };
+        }
+        if (t.screenshot === null) {
+          // Screenshot was removed — delete from storage
+          const oldTrade = (oldState?.trades || []).find(ot => ot.id === t.id);
+          if (oldTrade?.screenshot) batch.delete(screenshotRef.doc(t.id));
+        }
+        return t;
+      });
+
+      // Save trades in daily chunks (without screenshot data)
+      const newChunks = groupTradesByChunk(tradesForStorage);
+      const oldTradesForStorage = (oldState?.trades || []).map(t => t.screenshot ? { ...t, screenshot: '__stored__' } : t);
+      const oldChunks = groupTradesByChunk(oldTradesForStorage);
 
       // Write all chunks that changed
       const allChunkKeys = new Set([...Object.keys(newChunks), ...Object.keys(oldChunks)]);
       for (const key of allChunkKeys) {
         const newTrades = newChunks[key] || [];
         const oldTrades = oldChunks[key] || [];
-        // Only write if this chunk actually changed
         if (newTrades.length !== oldTrades.length || JSON.stringify(newTrades) !== JSON.stringify(oldTrades)) {
           if (newTrades.length === 0) {
             batch.delete(journalRef.doc(key));
