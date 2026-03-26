@@ -83,11 +83,13 @@ export default function App() {
     return () => unsub();
   }, [user]);
 
-  // Helper: get trade chunk key (e.g. "trades-2026-03") from a trade's entryDate
+  // Helper: get trade chunk key (e.g. "trades-2026-03-w1") from a trade's entryDate
   const getTradeChunkKey = (trade) => {
     const d = trade.entryDate || '';
-    const match = d.match(/^(\d{4}-\d{2})/);
-    return match ? `trades-${match[1]}` : 'trades-unknown';
+    const match = d.match(/^(\d{4}-\d{2})-(\d{2})/);
+    if (!match) return 'trades-unknown';
+    const week = Math.ceil(parseInt(match[2]) / 7); // w1=1-7, w2=8-14, w3=15-21, w4=22-28, w5=29-31
+    return `trades-${match[1]}-w${week}`;
   };
 
   // Group trades by month chunk
@@ -101,30 +103,43 @@ export default function App() {
     return chunks;
   };
 
-  // Migrate old single-doc format: move trades out of state doc into chunks
+  // Migrate old formats: state doc trades → chunks, monthly chunks → weekly chunks
   const migrateIfNeeded = async (uid) => {
-    const stateDoc = await db.collection('users').doc(uid).collection('journalData').doc('state').get();
-    if (!stateDoc.exists) return false;
-    const data = stateDoc.data();
-    if (!data.trades || data.trades.length === 0) return false;
-
-    // Old format detected — trades are in state doc. Split them out.
-    const chunks = groupTradesByChunk(data.trades);
+    const journalRef = db.collection('users').doc(uid).collection('journalData');
+    const snapshot = await journalRef.get();
     const batch = db.batch();
+    let migrated = false;
 
-    // Write each trade chunk
-    Object.entries(chunks).forEach(([key, trades]) => {
-      const chunkRef = db.collection('users').doc(uid).collection('journalData').doc(key);
-      batch.set(chunkRef, { trades: sanitizeForFirestore(trades) });
+    snapshot.forEach(doc => {
+      const data = doc.data();
+
+      // Migrate trades from state doc (old single-doc format)
+      if (doc.id === 'state' && data.trades && data.trades.length > 0) {
+        const chunks = groupTradesByChunk(data.trades);
+        Object.entries(chunks).forEach(([key, trades]) => {
+          batch.set(journalRef.doc(key), { trades: sanitizeForFirestore(trades) });
+        });
+        const { trades, ...rest } = data;
+        batch.set(journalRef.doc('state'), sanitizeForFirestore(rest));
+        migrated = true;
+      }
+
+      // Migrate old monthly chunks (e.g. "trades-2026-03") → weekly chunks
+      if (doc.id.match(/^trades-\d{4}-\d{2}$/) && data.trades && data.trades.length > 0) {
+        const chunks = groupTradesByChunk(data.trades);
+        Object.entries(chunks).forEach(([key, trades]) => {
+          batch.set(journalRef.doc(key), { trades: sanitizeForFirestore(trades) });
+        });
+        batch.delete(journalRef.doc(doc.id)); // Remove old monthly doc
+        migrated = true;
+      }
     });
 
-    // Remove trades from state doc, keep everything else
-    const { trades, ...rest } = data;
-    batch.set(db.collection('users').doc(uid).collection('journalData').doc('state'), sanitizeForFirestore(rest));
-
-    await batch.commit();
-    console.log(`Migrated ${data.trades.length} trades into ${Object.keys(chunks).length} chunk(s)`);
-    return true;
+    if (migrated) {
+      await batch.commit();
+      console.log('Migrated trades to weekly chunks');
+    }
+    return migrated;
   };
 
   // Load all journal data from chunked documents
