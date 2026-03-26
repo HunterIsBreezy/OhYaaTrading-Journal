@@ -186,7 +186,7 @@ export default function AuthScreen({ onAuthSuccess }) {
       <div className="relative z-10 min-h-screen flex items-center justify-center p-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
-            <svg viewBox="0 0 280 70" fill="none" className="w-64 h-16 mx-auto drop-shadow-2xl cursor-pointer" onClick={() => window.location.href = '/landing'}>
+            <svg viewBox="0 0 280 70" fill="none" className="w-64 h-16 mx-auto drop-shadow-2xl cursor-pointer" onClick={() => window.location.href = '/'}>
               <style>{`@keyframes floatC { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-15px)} }`}</style>
               {[{x:20,d:0,green:true},{x:42,d:.5,green:false},{x:64,d:1,green:true}].map(({x,d,green},i) => (
                 <g key={i} style={{ animation: `floatC 3s ease-in-out ${d}s infinite` }}>
