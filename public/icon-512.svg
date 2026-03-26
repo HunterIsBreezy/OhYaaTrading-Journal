@@ -1,0 +1,26 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="512" height="512" rx="96" fill="#1e40af"/>
+  
+  <!-- Mini candlesticks -->
+  <!-- Green candle -->
+  <line x1="128" y1="96" x2="128" y2="352" stroke="#22c55e" stroke-width="20"/>
+  <rect x="96" y="160" width="64" height="128" fill="#22c55e" rx="8"/>
+  
+  <!-- Red candle -->
+  <line x1="224" y1="64" x2="224" y2="320" stroke="#ef4444" stroke-width="20"/>
+  <rect x="192" y="112" width="64" height="144" fill="#ef4444" rx="8"/>
+  
+  <!-- Upward trend line -->
+  <path d="M96 384 L224 288 L352 256 L416 160" stroke="url(#grad512)" stroke-width="40" stroke-linecap="round" fill="none"/>
+  
+  <!-- Arrow head -->
+  <path d="M368 224 L416 160 L384 128" stroke="#22c55e" stroke-width="32" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+  
+  <defs>
+    <linearGradient id="grad512" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ef4444"/>
+      <stop offset="100%" stop-color="#22c55e"/>
+    </linearGradient>
+  </defs>
+</svg>

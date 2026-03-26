@@ -1,0 +1,35 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.safe-area-bottom { padding-bottom: env(safe-area-inset-bottom, 0); }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0); }
+.mb-safe { margin-bottom: env(safe-area-inset-bottom, 0); }
+
+/* Mobile bottom nav spacing */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-content-padding {
+    padding-bottom: calc(4rem + env(safe-area-inset-bottom, 0));
+  }
+}
+@supports not (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-content-padding {
+    padding-bottom: 4rem;
+  }
+}
+
+/* Prevent body scroll when modal open */
+body.modal-open {
+  overflow: hidden;
+}
+
+/* Touch-friendly tap highlights */
+@media (hover: none) {
+  button, a {
+    -webkit-tap-highlight-color: transparent;
+  }
+}

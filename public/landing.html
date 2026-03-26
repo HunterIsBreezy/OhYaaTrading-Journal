@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ohYaaa Trading Journal - Stop Guessing. Start Seeing.</title>
+  <meta name="description" content="The trading journal that shows you why you lose and how to stop. Log trades in seconds, get automatic stats, setup analytics, and mistake tracking.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23E8A83E' stroke-width='2'%3E%3Cpath d='M3 3v18h18'/%3E%3Cpath d='M18 9l-5 5-4-4-3 3'/%3E%3C/svg%3E">
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            surface: { 900: '#0A0A0F', 800: '#111118', 700: '#1A1A24', 600: '#22222E' },
+            accent: { DEFAULT: '#E8A83E', light: '#F0B94D', dark: '#C48A2A', muted: 'rgba(232,168,62,0.15)' },
+            profit: { DEFAULT: '#34D399', muted: 'rgba(52,211,153,0.15)' },
+            loss: { DEFAULT: '#F87171', muted: 'rgba(248,113,113,0.15)' },
+            txt: { primary: '#F0EDE6', secondary: '#9590A0', tertiary: '#7A7688' }
+          },
+          fontFamily: {
+            display: ['"Space Grotesk"', 'sans-serif'],
+            body: ['"Plus Jakarta Sans"', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'monospace'],
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; }
+    h1, h2, h3, h4 { font-family: 'Space Grotesk', sans-serif; }
+    .font-mono, .stat-value { font-family: 'JetBrains Mono', monospace; }
+
+    /* Noise texture */
+    .noise { background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E"); }
+
+    /* Section divider */
+    .divider { height: 1px; background: linear-gradient(90deg, transparent, rgba(232,168,62,0.3), transparent); }
+
+    /* Screenshot app window frame */
+    .app-frame { border-radius: 12px; overflow: hidden; border: 1px solid rgba(255,255,255,0.08); background: #111118; }
+    .app-frame .frame-bar { display: flex; align-items: center; gap: 6px; padding: 10px 14px; background: #1A1A24; }
+    .app-frame .dot { width: 10px; height: 10px; border-radius: 50%; }
+    .app-frame .dot.r { background: #F87171; } .app-frame .dot.y { background: #FBBF24; } .app-frame .dot.g { background: #34D399; }
+    .app-frame .frame-accent { height: 2px; background: linear-gradient(90deg, #E8A83E, #34D399); }
+    .app-frame img { display: block; width: 100%; }
+
+    /* Staggered fade-in */
+    .stagger > * { opacity: 0; transform: translateY(24px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .stagger.visible > *:nth-child(1) { transition-delay: 0ms; opacity: 1; transform: translateY(0); }
+    .stagger.visible > *:nth-child(2) { transition-delay: 100ms; opacity: 1; transform: translateY(0); }
+    .stagger.visible > *:nth-child(3) { transition-delay: 200ms; opacity: 1; transform: translateY(0); }
+    .stagger.visible > *:nth-child(4) { transition-delay: 300ms; opacity: 1; transform: translateY(0); }
+    .stagger.visible > *:nth-child(5) { transition-delay: 400ms; opacity: 1; transform: translateY(0); }
+    .stagger.visible > *:nth-child(6) { transition-delay: 500ms; opacity: 1; transform: translateY(0); }
+
+    .fade-up { opacity: 0; transform: translateY(30px); transition: opacity 0.7s ease, transform 0.7s ease; }
+    .fade-up.visible { opacity: 1; transform: translateY(0); }
+
+    /* Card hover - amber border illumination */
+    .card-glow { border-left: 2px solid rgba(232,168,62,0.15); transition: border-color 0.3s, background-color 0.3s; }
+    .card-glow:hover { border-left-color: #E8A83E; background-color: #1A1A24; }
+
+    /* CTA glow */
+    .cta-glow { box-shadow: 0 0 30px rgba(232,168,62,0.2); transition: box-shadow 0.2s, transform 0.2s; }
+    .cta-glow:hover { box-shadow: 0 0 50px rgba(232,168,62,0.35); transform: scale(1.02); }
+
+    /* Hero scanline SVG */
+    .scanline path { stroke-dasharray: 1000; stroke-dashoffset: 1000; animation: draw 2.5s ease-out 0.5s forwards; }
+    @keyframes draw { to { stroke-dashoffset: 0; } }
+
+    /* Screenshot glow + hover zoom */
+    .screenshot-glow { box-shadow: 0 25px 80px -20px rgba(232,168,62,0.15); }
+    .app-frame-link { display: block; transition: transform 0.35s cubic-bezier(0.25,0.46,0.45,0.94), box-shadow 0.35s ease; cursor: pointer; }
+    .app-frame-link:hover { transform: scale(1.04); box-shadow: 0 30px 100px -20px rgba(232,168,62,0.25); }
+    .app-frame-link:hover .frame-accent { background: linear-gradient(90deg, #F0B94D, #34D399); }
+
+    /* Nav scroll state */
+    .nav-transparent { background: transparent; border-color: transparent; }
+    .nav-solid { background: rgba(17,17,24,0.95); backdrop-filter: blur(12px); border-color: rgba(255,255,255,0.06); }
+  </style>
+</head>
+<body class="bg-surface-900 text-txt-primary antialiased">
+
+  <!-- Navigation -->
+  <nav id="mainNav" class="fixed top-0 left-0 right-0 z-50 border-b transition-all duration-300 nav-transparent">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="/landing.html" class="flex items-center gap-1">
+          <span class="text-2xl font-display font-bold">
+            <span class="text-txt-primary">oh</span><span class="text-accent">Yaaa</span>
+          </span>
+        </a>
+        <div class="hidden md:flex items-center gap-8">
+          <div class="relative group">
+            <button class="text-txt-secondary hover:text-txt-primary transition-colors text-sm font-medium font-body flex items-center gap-1">
+              Features
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+            <div class="absolute top-full left-0 mt-2 w-52 bg-surface-700 rounded-lg shadow-xl border border-white/10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+              <a href="/feature-trade-logging.html" class="block px-4 py-2.5 text-sm text-txt-secondary hover:text-txt-primary hover:bg-white/5 rounded-t-lg font-body">Trade Logging</a>
+              <a href="/feature-dashboard.html" class="block px-4 py-2.5 text-sm text-txt-secondary hover:text-txt-primary hover:bg-white/5 font-body">Dashboard & Analytics</a>
+              <a href="/feature-calendar.html" class="block px-4 py-2.5 text-sm text-txt-secondary hover:text-txt-primary hover:bg-white/5 font-body">Calendar</a>
+              <a href="/feature-goals.html" class="block px-4 py-2.5 text-sm text-txt-secondary hover:text-txt-primary hover:bg-white/5 font-body">Goals & Challenges</a>
+              <a href="/feature-mentor.html" class="block px-4 py-2.5 text-sm text-txt-secondary hover:text-txt-primary hover:bg-white/5 rounded-b-lg font-body">Mentorship</a>
+            </div>
+          </div>
+          <a href="#how-it-works" class="text-txt-secondary hover:text-txt-primary transition-colors text-sm font-medium font-body">How It Works</a>
+        </div>
+        <div class="hidden md:flex items-center gap-3">
+          <a href="/index.html" class="text-txt-secondary hover:text-txt-primary transition-colors text-sm font-medium font-body px-4 py-2">Log In</a>
+          <a href="/index.html" class="bg-accent hover:bg-accent-light text-surface-900 text-sm font-semibold font-body px-5 py-2.5 rounded-lg transition-colors">Try the Demo</a>
+        </div>
+        <button onclick="document.getElementById('mobileMenu').classList.toggle('hidden')" class="md:hidden text-txt-secondary hover:text-txt-primary p-2" aria-label="Toggle menu">
+          <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+      </div>
+      <div id="mobileMenu" class="hidden md:hidden border-t border-white/10 py-4 px-4">
+        <a href="/feature-trade-logging.html" class="block py-2 text-txt-secondary hover:text-txt-primary text-sm font-body">Trade Logging</a>
+        <a href="/feature-dashboard.html" class="block py-2 text-txt-secondary hover:text-txt-primary text-sm font-body">Dashboard & Analytics</a>
+        <a href="/feature-calendar.html" class="block py-2 text-txt-secondary hover:text-txt-primary text-sm font-body">Calendar</a>
+        <a href="/feature-goals.html" class="block py-2 text-txt-secondary hover:text-txt-primary text-sm font-body">Goals & Challenges</a>
+        <a href="/feature-mentor.html" class="block py-2 text-txt-secondary hover:text-txt-primary text-sm font-body">Mentorship</a>
+        <div class="border-t border-white/10 mt-2 pt-2">
+          <a href="/index.html" class="block py-2 text-txt-secondary hover:text-txt-primary text-sm font-body">Log In</a>
+          <a href="/index.html" class="block py-2 text-accent hover:text-accent-light text-sm font-semibold font-body">Try the Demo</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+  <main>
+
+  <!-- ===== HERO ===== -->
+  <section class="min-h-screen flex items-center pt-16 relative overflow-hidden noise">
+    <div class="absolute inset-0 pointer-events-none">
+      <div class="absolute top-1/3 left-1/4 w-[500px] h-[500px] bg-accent/5 rounded-full blur-[120px]"></div>
+      <div class="absolute bottom-1/4 right-1/3 w-[400px] h-[400px] bg-profit/5 rounded-full blur-[100px]"></div>
+    </div>
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-20 relative z-10 w-full">
+      <div class="text-center max-w-3xl mx-auto mb-14 stagger" id="heroStagger">
+        <div class="inline-flex items-center gap-2 bg-accent-muted border border-accent/20 rounded-full px-4 py-1.5 mb-8">
+          <span class="w-2 h-2 bg-profit rounded-full animate-pulse"></span>
+          <span class="text-sm text-txt-secondary font-body">No credit card &mdash; No paywalls</span>
+        </div>
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-display font-bold leading-tight mb-6">
+          Stop Guessing Why You're Losing.<br>
+          <span class="text-accent">Start Seeing Why.</span>
+        </h1>
+        <p class="text-lg sm:text-xl text-txt-secondary mb-10 max-w-2xl mx-auto font-body">
+          Log trades in seconds. Get automatic stats, setup analytics, and mistake tracking that show you exactly where your edge is.
+        </p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+          <a href="/index.html" class="w-full sm:w-auto bg-accent hover:bg-accent-light text-surface-900 text-lg font-semibold font-body px-8 py-4 rounded-xl cta-glow">
+            Try the Demo
+          </a>
+          <a href="#how-it-works" class="w-full sm:w-auto border border-white/15 hover:bg-white/5 text-txt-primary text-lg font-medium font-body px-8 py-4 rounded-xl transition-colors text-center">
+            See How It Works
+          </a>
+        </div>
+      </div>
+      <!-- Scanline -->
+      <div class="max-w-4xl mx-auto mb-8">
+        <svg class="scanline w-full h-8" viewBox="0 0 800 30" fill="none">
+          <path d="M0 25 Q100 25 150 20 Q200 15 250 22 Q300 28 350 18 Q400 8 450 15 Q500 22 550 12 Q600 2 700 5 Q750 7 800 3" stroke="url(#scanGrad)" stroke-width="2" stroke-linecap="round" fill="none"/>
+          <defs><linearGradient id="scanGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#F87171"/><stop offset="40%" stop-color="#E8A83E"/><stop offset="100%" stop-color="#34D399"/></linearGradient></defs>
+        </svg>
+      </div>
+      <!-- Hero Screenshot -->
+      <div class="relative max-w-5xl mx-auto fade-up" id="heroScreenshot">
+        <div class="app-frame screenshot-glow">
+          <div class="frame-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="frame-accent"></div>
+          <img src="/screenshots/dashboard.png" alt="ohYaaa Trading Journal Dashboard" loading="eager">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ===== PAIN POINTS ===== -->
+  <section class="py-20 lg:py-28 bg-surface-800 noise">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14 fade-up">
+        <h2 class="text-3xl sm:text-4xl font-display font-bold text-txt-primary mb-4">You already know something isn't working.</h2>
+      </div>
+      <div class="grid sm:grid-cols-3 gap-6 stagger" id="painStagger">
+        <div class="bg-surface-700 rounded-xl p-6 card-glow">
+          <div class="w-10 h-10 bg-loss-muted rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-loss" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h18M3 14h18M3 18h18M3 6h18"/></svg>
+          </div>
+          <h3 class="font-display font-bold text-txt-primary mb-2">Your spreadsheet has 47 columns and zero insights.</h3>
+          <p class="text-sm text-txt-secondary font-body">You track data. It doesn't track patterns.</p>
+        </div>
+        <div class="bg-surface-700 rounded-xl p-6 card-glow">
+          <div class="w-10 h-10 bg-accent-muted rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-accent" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          </div>
+          <h3 class="font-display font-bold text-txt-primary mb-2">You have a "feeling" about your best setup. Feelings don't pay bills.</h3>
+          <p class="text-sm text-txt-secondary font-body">Without data, you're trading on hope.</p>
+        </div>
+        <div class="bg-surface-700 rounded-xl p-6 card-glow">
+          <div class="w-10 h-10 bg-loss-muted rounded-lg flex items-center justify-center mb-4">
+            <svg class="w-5 h-5 text-loss" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z"/><path stroke-linecap="round" stroke-linejoin="round" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z"/></svg>
+          </div>
+          <h3 class="font-display font-bold text-txt-primary mb-2">Your revenge trades cost more than you think.</h3>
+          <p class="text-sm text-txt-secondary font-body">But you don't know how much. Because you didn't log them.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ===== SOLUTION REVEAL ===== -->
+  <section class="py-20 lg:py-28 noise">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14 fade-up">
+        <h2 class="text-3xl sm:text-4xl font-display font-bold text-txt-primary mb-4">What if your losing trades were your best teacher?</h2>
+        <p class="text-lg text-txt-secondary max-w-2xl mx-auto font-body">
+          ohYaaa automatically calculates your win rate, tracks your setups, prices your mistakes, and shows your equity curve. You just log the trade. We show you the story.
+        </p>
+      </div>
+      <div class="max-w-5xl mx-auto fade-up">
+        <div class="app-frame screenshot-glow">
+          <div class="frame-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="frame-accent"></div>
+          <img src="/screenshots/dashboard-charts.png" alt="ohYaaa cumulative P&L chart and analytics" loading="lazy">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ===== FEATURE SHOWCASE ===== -->
+  <section id="features" class="py-20 lg:py-28 bg-surface-800 noise">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+
+      <!-- Feature 1: Trade Logging -->
+      <div class="grid lg:grid-cols-2 gap-12 items-center mb-24 fade-up">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-accent-muted text-accent rounded-full px-3 py-1 text-sm font-medium font-body mb-4">Trade Logging</div>
+          <h3 class="text-2xl sm:text-3xl font-display font-bold text-txt-primary mb-4">Three ways to log. Zero excuses.</h3>
+          <p class="text-txt-secondary mb-6 font-body">Entry/exit prices, direct P&L, or daily totals. Pick the method that matches your data. Tag setups and mistakes as you go. Stats update the moment you save.</p>
+          <ul class="space-y-3 font-body">
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-accent rounded-full flex-shrink-0"></span><span class="text-txt-secondary">3 flexible input methods</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-accent rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Setup + mistake tagging</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-accent rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Notes, screenshots, star ratings</span></li>
+          </ul>
+          <a href="/feature-trade-logging.html" class="inline-flex items-center gap-1 text-accent hover:text-accent-light text-sm font-medium font-body mt-6 transition-colors">See how logging works <span>&rarr;</span></a>
+        </div>
+        <a href="/feature-trade-logging.html" class="app-frame-link app-frame screenshot-glow">
+          <div class="frame-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="frame-accent"></div>
+          <img src="/screenshots/trade-form.png" alt="Trade logging form" loading="lazy">
+        </a>
+      </div>
+
+      <!-- Feature 2: Dashboard -->
+      <div class="grid lg:grid-cols-2 gap-12 items-center mb-24 fade-up">
+        <a href="/feature-dashboard.html" class="order-2 lg:order-1 app-frame-link app-frame screenshot-glow">
+          <div class="frame-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="frame-accent"></div>
+          <img src="/screenshots/dashboard.png" alt="Performance dashboard" loading="lazy">
+        </a>
+        <div class="order-1 lg:order-2">
+          <div class="inline-flex items-center gap-2 bg-profit-muted text-profit rounded-full px-3 py-1 text-sm font-medium font-body mb-4">Dashboard</div>
+          <h3 class="text-2xl sm:text-3xl font-display font-bold text-txt-primary mb-4">Your numbers, finally honest.</h3>
+          <p class="text-txt-secondary mb-6 font-body">Win rate, profit factor, avg winner vs loser, P&L by setup, cumulative equity curve. All calculated automatically. No spreadsheet formulas.</p>
+          <ul class="space-y-3 font-body">
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-profit rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Real-time statistics</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-profit rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Setup performance breakdown</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-profit rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Equity curve visualization</span></li>
+          </ul>
+          <a href="/feature-dashboard.html" class="inline-flex items-center gap-1 text-accent hover:text-accent-light text-sm font-medium font-body mt-6 transition-colors">Explore the dashboard <span>&rarr;</span></a>
+        </div>
+      </div>
+
+      <!-- Feature 3: Calendar -->
+      <div class="grid lg:grid-cols-2 gap-12 items-center mb-24 fade-up">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-accent-muted text-accent rounded-full px-3 py-1 text-sm font-medium font-body mb-4">Calendar</div>
+          <h3 class="text-2xl sm:text-3xl font-display font-bold text-txt-primary mb-4">Your month, decoded in color.</h3>
+          <p class="text-txt-secondary mb-6 font-body">Green days, red days, patterns you never noticed. Click any day to see every trade, add notes, and track your daily goal.</p>
+          <ul class="space-y-3 font-body">
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-accent rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Color-coded P&L per day</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-accent rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Click-to-drill-down detail</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-accent rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Daily journal notes</span></li>
+          </ul>
+          <a href="/feature-calendar.html" class="inline-flex items-center gap-1 text-accent hover:text-accent-light text-sm font-medium font-body mt-6 transition-colors">See the calendar <span>&rarr;</span></a>
+        </div>
+        <a href="/feature-calendar.html" class="app-frame-link app-frame screenshot-glow">
+          <div class="frame-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="frame-accent"></div>
+          <img src="/screenshots/calendar.png" alt="Calendar view" loading="lazy">
+        </a>
+      </div>
+
+      <!-- Feature 4: Setups & Mistakes -->
+      <div class="grid lg:grid-cols-2 gap-12 items-center mb-24 fade-up">
+        <a href="/feature-dashboard.html" class="order-2 lg:order-1 app-frame-link app-frame screenshot-glow">
+          <div class="frame-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="frame-accent"></div>
+          <img src="/screenshots/mistakes.png" alt="Mistake tracking analytics" loading="lazy">
+        </a>
+        <div class="order-1 lg:order-2">
+          <div class="inline-flex items-center gap-2 bg-loss-muted text-loss rounded-full px-3 py-1 text-sm font-medium font-body mb-4">Setup & Mistake Analytics</div>
+          <h3 class="text-2xl sm:text-3xl font-display font-bold text-txt-primary mb-4">Know your best move. Price your worst habit.</h3>
+          <p class="text-txt-secondary mb-6 font-body">Every setup gets a P&L report card. Every mistake gets a dollar amount. Stop guessing which strategies work &mdash; the data will tell you.</p>
+          <ul class="space-y-3 font-body">
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-loss rounded-full flex-shrink-0"></span><span class="text-txt-secondary">P&L by setup with rankings</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-loss rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Mistake frequency + cost tracking</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-loss rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Top 3 most profitable, most costly</span></li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Feature 5: Goals -->
+      <div class="grid lg:grid-cols-2 gap-12 items-center fade-up">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-accent-muted text-accent rounded-full px-3 py-1 text-sm font-medium font-body mb-4">Goals & Challenges</div>
+          <h3 class="text-2xl sm:text-3xl font-display font-bold text-txt-primary mb-4">Ambition with a deadline.</h3>
+          <p class="text-txt-secondary mb-6 font-body">Set a yearly target. Watch it break down into daily, weekly, monthly bites. Create challenges to build discipline streaks and hit profit milestones.</p>
+          <ul class="space-y-3 font-body">
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-accent rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Progress ring with daily/weekly targets</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-accent rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Template + custom challenges</span></li>
+            <li class="flex items-center gap-3"><span class="w-1.5 h-1.5 bg-accent rounded-full flex-shrink-0"></span><span class="text-txt-secondary">Status badges and progress tracking</span></li>
+          </ul>
+          <a href="/feature-goals.html" class="inline-flex items-center gap-1 text-accent hover:text-accent-light text-sm font-medium font-body mt-6 transition-colors">Set your first target <span>&rarr;</span></a>
+        </div>
+        <a href="/feature-goals.html" class="app-frame-link app-frame screenshot-glow">
+          <div class="frame-bar"><span class="dot r"></span><span class="dot y"></span><span class="dot g"></span></div>
+          <div class="frame-accent"></div>
+          <img src="/screenshots/goals.png" alt="Goals and challenges" loading="lazy">
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ===== HOW IT WORKS ===== -->
+  <section id="how-it-works" class="py-20 lg:py-28 noise">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16 fade-up">
+        <h2 class="text-3xl sm:text-4xl font-display font-bold text-txt-primary mb-4">Get started in 60 seconds</h2>
+        <p class="text-lg text-txt-secondary max-w-2xl mx-auto font-body">No setup. No spreadsheet formulas. Just sign up and go.</p>
+      </div>
+      <div class="grid md:grid-cols-3 gap-8 stagger" id="stepsStagger">
+        <div class="text-center">
+          <div class="w-16 h-16 bg-accent/15 border border-accent/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <span class="text-2xl font-display font-bold text-accent">1</span>
+          </div>
+          <h3 class="text-xl font-display font-bold text-txt-primary mb-3">Sign up</h3>
+          <p class="text-txt-secondary font-body">Create your free account in 10 seconds. No credit card. No trial period.</p>
+        </div>
+        <div class="text-center">
+          <div class="w-16 h-16 bg-accent/15 border border-accent/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <span class="text-2xl font-display font-bold text-accent">2</span>
+          </div>
+          <h3 class="text-xl font-display font-bold text-txt-primary mb-3">Log your trades</h3>
+          <p class="text-txt-secondary font-body">Use any of three input methods. Tag your setups and mistakes. Seconds per trade.</p>
+        </div>
+        <div class="text-center">
+          <div class="w-16 h-16 bg-accent/15 border border-accent/30 rounded-2xl flex items-center justify-center mx-auto mb-6">
+            <span class="text-2xl font-display font-bold text-accent">3</span>
+          </div>
+          <h3 class="text-xl font-display font-bold text-txt-primary mb-3">See your story</h3>
+          <p class="text-txt-secondary font-body">Stats, charts, calendar, and analytics populate automatically. Find your edge.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ===== SOCIAL PROOF ===== -->
+  <section class="py-20 lg:py-24 bg-surface-800 noise">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14 fade-up">
+        <h2 class="text-3xl sm:text-4xl font-display font-bold text-txt-primary mb-4">Traders who stopped guessing.</h2>
+      </div>
+      <div class="grid md:grid-cols-3 gap-6 stagger" id="proofStagger">
+        <div class="bg-surface-700 rounded-xl p-6 border border-white/5">
+          <div class="flex items-center gap-1 mb-4">
+            <span class="text-accent">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+          </div>
+          <p class="text-txt-secondary font-body text-sm mb-4">"I was trading for 2 years without journaling. Within a month of using ohYaaa, I found out my VWAP bounces were profitable and my reversals were bleeding me dry. Cut the losers, doubled down on winners. Best decision I made."</p>
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center"><span class="text-accent font-display font-bold text-sm">M</span></div>
+            <div><p class="text-txt-primary text-sm font-medium font-body">Marcus T.</p><p class="text-txt-tertiary text-xs font-body">Day trader, 3 years</p></div>
+          </div>
+        </div>
+        <div class="bg-surface-700 rounded-xl p-6 border border-white/5">
+          <div class="flex items-center gap-1 mb-4">
+            <span class="text-accent">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+          </div>
+          <p class="text-txt-secondary font-body text-sm mb-4">"The mistake tracker alone is worth it. I put a dollar amount on my FOMO entries &mdash; $2,400 last quarter. Seeing that number made me stop cold. Haven't made a FOMO trade in 6 weeks."</p>
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-profit/20 rounded-full flex items-center justify-center"><span class="text-profit font-display font-bold text-sm">S</span></div>
+            <div><p class="text-txt-primary text-sm font-medium font-body">Sarah K.</p><p class="text-txt-tertiary text-xs font-body">Options trader, 18 months</p></div>
+          </div>
+        </div>
+        <div class="bg-surface-700 rounded-xl p-6 border border-white/5">
+          <div class="flex items-center gap-1 mb-4">
+            <span class="text-accent">&#9733;&#9733;&#9733;&#9733;&#9733;</span>
+          </div>
+          <p class="text-txt-secondary font-body text-sm mb-4">"I tried Tradervue and TradeZella. Both felt overcomplicated. ohYaaa does exactly what I need &mdash; log fast, see my stats, track my setups. The calendar view is my favorite feature by far."</p>
+          <div class="flex items-center gap-3">
+            <div class="w-8 h-8 bg-accent/20 rounded-full flex items-center justify-center"><span class="text-accent font-display font-bold text-sm">J</span></div>
+            <div><p class="text-txt-primary text-sm font-medium font-body">Jason R.</p><p class="text-txt-tertiary text-xs font-body">Scalper, futures</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ===== MENTORSHIP TEASER ===== -->
+  <section class="py-20 bg-surface-800 noise">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 fade-up">
+      <div class="bg-surface-700 rounded-2xl p-8 lg:p-12 border border-white/5">
+        <div class="text-center mb-8">
+          <h2 class="text-2xl sm:text-3xl font-display font-bold text-txt-primary mb-3">Want a second pair of eyes?</h2>
+          <p class="text-txt-secondary font-body max-w-2xl mx-auto">Connect with experienced traders who review your trades, give assignments, and hold you accountable with weekly check-ins. Built right into the platform.</p>
+        </div>
+        <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          <div class="flex items-center gap-3 bg-surface-600 rounded-lg p-3"><span class="w-2 h-2 bg-accent rounded-full flex-shrink-0"></span><span class="text-sm text-txt-secondary font-body">Trade reviews</span></div>
+          <div class="flex items-center gap-3 bg-surface-600 rounded-lg p-3"><span class="w-2 h-2 bg-accent rounded-full flex-shrink-0"></span><span class="text-sm text-txt-secondary font-body">Assignments</span></div>
+          <div class="flex items-center gap-3 bg-surface-600 rounded-lg p-3"><span class="w-2 h-2 bg-accent rounded-full flex-shrink-0"></span><span class="text-sm text-txt-secondary font-body">Weekly check-ins</span></div>
+          <div class="flex items-center gap-3 bg-surface-600 rounded-lg p-3"><span class="w-2 h-2 bg-accent rounded-full flex-shrink-0"></span><span class="text-sm text-txt-secondary font-body">Q&A system</span></div>
+        </div>
+        <div class="text-center">
+          <a href="/feature-mentor.html" class="inline-flex items-center gap-1 text-accent hover:text-accent-light font-medium font-body transition-colors">Learn about mentorship <span>&rarr;</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ===== FAQ ===== -->
+  <section class="py-20 lg:py-28 noise">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-14 fade-up">
+        <h2 class="text-3xl sm:text-4xl font-display font-bold text-txt-primary mb-4">Common questions</h2>
+      </div>
+      <div class="space-y-4 fade-up">
+        <details class="bg-surface-700 rounded-xl border border-white/5 group" open>
+          <summary class="flex items-center justify-between p-5 cursor-pointer font-display font-bold text-txt-primary text-sm sm:text-base">Is it really free?<span class="text-txt-tertiary group-open:rotate-180 transition-transform ml-4">&#9662;</span></summary>
+          <div class="px-5 pb-5 text-txt-secondary font-body text-sm">Yes. ohYaaa is free to use with no credit card required and no trial period. No paywalls blocking core features.</div>
+        </details>
+        <details class="bg-surface-700 rounded-xl border border-white/5 group">
+          <summary class="flex items-center justify-between p-5 cursor-pointer font-display font-bold text-txt-primary text-sm sm:text-base">Is my data secure?<span class="text-txt-tertiary group-open:rotate-180 transition-transform ml-4">&#9662;</span></summary>
+          <div class="px-5 pb-5 text-txt-secondary font-body text-sm">Your data is stored on Google Firebase with industry-standard encryption. Only you can access your trading data &mdash; we can't see it, and we'll never sell it.</div>
+        </details>
+        <details class="bg-surface-700 rounded-xl border border-white/5 group">
+          <summary class="flex items-center justify-between p-5 cursor-pointer font-display font-bold text-txt-primary text-sm sm:text-base">What markets does it support?<span class="text-txt-tertiary group-open:rotate-180 transition-transform ml-4">&#9662;</span></summary>
+          <div class="px-5 pb-5 text-txt-secondary font-body text-sm">Stocks, options, futures, forex, and crypto. You can log any asset type and track performance across all of them.</div>
+        </details>
+        <details class="bg-surface-700 rounded-xl border border-white/5 group">
+          <summary class="flex items-center justify-between p-5 cursor-pointer font-display font-bold text-txt-primary text-sm sm:text-base">Can I import trades from my broker?<span class="text-txt-tertiary group-open:rotate-180 transition-transform ml-4">&#9662;</span></summary>
+          <div class="px-5 pb-5 text-txt-secondary font-body text-sm">Not yet &mdash; broker import is on the roadmap. For now, the three input methods (entry/exit, direct P&L, daily total) make manual logging fast. Most trades take under 10 seconds to log.</div>
+        </details>
+        <details class="bg-surface-700 rounded-xl border border-white/5 group">
+          <summary class="flex items-center justify-between p-5 cursor-pointer font-display font-bold text-txt-primary text-sm sm:text-base">How is this different from a spreadsheet?<span class="text-txt-tertiary group-open:rotate-180 transition-transform ml-4">&#9662;</span></summary>
+          <div class="px-5 pb-5 text-txt-secondary font-body text-sm">Spreadsheets require you to build and maintain formulas, charts, and dashboards yourself. ohYaaa calculates everything automatically &mdash; win rate, profit factor, P&L by setup, mistake costs, equity curves &mdash; the moment you log a trade. Zero formulas. Zero maintenance.</div>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <div class="divider"></div>
+
+  <!-- ===== FINAL CTA ===== -->
+  <section class="py-24 lg:py-32 noise relative overflow-hidden">
+    <div class="absolute inset-0 pointer-events-none">
+      <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-accent/5 rounded-full blur-[150px]"></div>
+    </div>
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center relative z-10 fade-up">
+      <h2 class="text-3xl sm:text-4xl lg:text-5xl font-display font-bold text-txt-primary mb-6">
+        Your next trade is a data point.<br>Make it count.
+      </h2>
+      <a href="/index.html" class="inline-block bg-accent hover:bg-accent-light text-surface-900 text-lg font-semibold font-body px-10 py-4 rounded-xl cta-glow mt-4">
+        Try the Demo &mdash; No Paywalls
+      </a>
+      <p class="text-sm text-txt-tertiary mt-4 font-body">No credit card. No paywalls. No catch.</p>
+    </div>
+  </section>
+
+  <!-- ===== FOOTER ===== -->
+  <div class="divider"></div>
+  <footer class="bg-surface-800 py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl font-display font-bold"><span class="text-txt-primary">oh</span><span class="text-accent">Yaaa</span></span>
+          <span class="text-txt-tertiary text-sm ml-2 font-body">Trading Journal</span>
+        </div>
+        <div class="flex items-center gap-6 font-body">
+          <a href="/index.html" class="text-txt-tertiary hover:text-txt-primary transition-colors text-sm">Log In</a>
+          <a href="/landing.html#features" class="text-txt-tertiary hover:text-txt-primary transition-colors text-sm">Features</a>
+          <a href="mailto:support@ohyaaa.com" class="text-txt-tertiary hover:text-txt-primary transition-colors text-sm">Contact</a>
+        </div>
+        <p class="text-txt-tertiary text-sm font-body">&copy; 2026 ohYaaa. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Scripts -->
+  <script>
+    // Scroll observer for animations
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.fade-up, .stagger').forEach(el => obs.observe(el));
+
+    // Trigger hero immediately
+    setTimeout(() => {
+      const hs = document.getElementById('heroStagger');
+      if (hs) hs.classList.add('visible');
+      const hss = document.getElementById('heroScreenshot');
+      if (hss) hss.classList.add('visible');
+    }, 100);
+
+    // Nav scroll effect
+    const nav = document.getElementById('mainNav');
+    window.addEventListener('scroll', () => {
+      if (window.scrollY > 80) {
+        nav.classList.remove('nav-transparent');
+        nav.classList.add('nav-solid');
+      } else {
+        nav.classList.add('nav-transparent');
+        nav.classList.remove('nav-solid');
+      }
+    });
+
+    // Smooth scroll
+    document.querySelectorAll('a[href^="#"]').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        const t = document.querySelector(a.getAttribute('href'));
+        if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+  </script>
+</body>
+</html>

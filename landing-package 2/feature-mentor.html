@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mentorship - ohYaaa Trading Journal</title>
+  <meta name="description" content="Connect with experienced traders who review your trades, give feedback, and help you improve faster. Built-in mentor-student system for accelerated learning.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%233b82f6' stroke-width='2'%3E%3Cpath d='M3 3v18h18'/%3E%3Cpath d='M18 9l-5 5-4-4-3 3'/%3E%3C/svg%3E">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+    html { scroll-behavior: smooth; }
+    .gradient-text { background: linear-gradient(135deg, #3b82f6 0%, #60a5fa 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero-gradient { background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #0f172a 100%); }
+    .screenshot { transition: transform 0.3s ease; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); }
+    .screenshot:hover { transform: scale(1.02); }
+    .fade-in { opacity: 0; transform: translateY(20px); transition: opacity 0.6s ease, transform 0.6s ease; }
+    .fade-in.visible { opacity: 1; transform: translateY(0); }
+  </style>
+</head>
+<body class="bg-white text-gray-900 antialiased">
+  
+  <!-- Navigation -->
+  <nav class="fixed top-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-md border-b border-white/10">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <a href="landing.html" class="flex items-center gap-2">
+          <span class="text-2xl font-extrabold"><span class="text-white">oh</span><span class="text-blue-400">Yaaa</span></span>
+        </a>
+        <div class="hidden md:flex items-center gap-8">
+          <div class="relative group">
+            <button class="text-slate-300 hover:text-white transition-colors text-sm font-medium flex items-center gap-1">
+              Features
+              <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            <div class="absolute top-full left-0 mt-2 w-48 bg-slate-800 rounded-lg shadow-xl border border-white/10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+              <a href="feature-trade-logging.html" class="block px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5 rounded-t-lg">Trade Logging</a>
+              <a href="feature-dashboard.html" class="block px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5">Dashboard</a>
+              <a href="feature-calendar.html" class="block px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5">Calendar</a>
+              <a href="feature-goals.html" class="block px-4 py-2.5 text-sm text-slate-300 hover:text-white hover:bg-white/5">Goals & Challenges</a>
+              <a href="feature-mentor.html" class="block px-4 py-2.5 text-sm text-white bg-blue-600/20 border-l-2 border-blue-500 rounded-b-lg">Mentorship</a>
+            </div>
+          </div>
+          <a href="landing.html#how-it-works" class="text-slate-300 hover:text-white transition-colors text-sm font-medium">How It Works</a>
+        </div>
+        <div class="flex items-center gap-3">
+          <a href="index.html" class="text-slate-300 hover:text-white transition-colors text-sm font-medium px-4 py-2">Log In</a>
+          <a href="index.html" class="bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold px-5 py-2.5 rounded-lg transition-colors">Get Started Free</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="hero-gradient pt-32 pb-20 relative overflow-hidden">
+    <div class="absolute inset-0 overflow-hidden pointer-events-none">
+      <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl"></div>
+      <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-purple-500/10 rounded-full blur-3xl"></div>
+    </div>
+    
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      <div class="flex items-center gap-2 text-sm text-slate-400 mb-8">
+        <a href="landing.html" class="hover:text-white transition-colors">Home</a>
+        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7" /></svg>
+        <span class="text-white">Mentorship</span>
+      </div>
+      
+      <div class="grid lg:grid-cols-2 gap-12 items-center">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-blue-500/20 border border-blue-500/30 rounded-full px-4 py-1.5 mb-6">
+            <svg class="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+            </svg>
+            <span class="text-sm text-blue-300 font-medium">Mentorship</span>
+          </div>
+          
+          <h1 class="text-4xl sm:text-5xl font-extrabold text-white leading-tight mb-6">
+            Learn Faster with <span class="gradient-text">Expert Guidance</span>
+          </h1>
+          
+          <p class="text-lg text-slate-300 mb-8">
+            Connect with experienced traders who review your trades, give personalized feedback, and help you avoid costly mistakes. Accelerate your learning curve with one-on-one mentorship built right into the platform.
+          </p>
+          
+          <div class="flex flex-col sm:flex-row gap-4">
+            <a href="index.html" class="bg-blue-600 hover:bg-blue-500 text-white text-lg font-semibold px-8 py-4 rounded-xl transition-all hover:scale-105 text-center">
+              Find a Mentor
+            </a>
+          </div>
+        </div>
+        
+        <div class="screenshot rounded-xl overflow-hidden border border-white/10">
+          <img src="https://placehold.co/600x450/1e293b/64748b?text=Mentor+Dashboard" alt="Mentor dashboard" class="w-full">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Overview Section -->
+  <section class="py-20 bg-white">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 fade-in">
+      <h2 class="text-3xl font-bold text-gray-900 mb-6 text-center">Why Mentorship Matters</h2>
+      
+      <div class="prose prose-lg max-w-none text-gray-600 mb-12">
+        <p>
+          Trading is hard enough without learning everything the hard way. A mentor who's already made (and learned from) the mistakes can help you skip years of painful trial and error. They see patterns in your trading that you can't see yourself.
+        </p>
+        <p>
+          ohYaaa's built-in mentorship system connects students with experienced traders. Share your journal, get feedback on specific trades, receive homework assignments, and stay accountable with regular check-ins — all within the platform.
+        </p>
+      </div>
+      
+      <div class="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="text-center p-6">
+          <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 class="font-semibold text-gray-900 mb-1">Trade Reviews</h3>
+          <p class="text-sm text-gray-500">Get expert feedback</p>
+        </div>
+        
+        <div class="text-center p-6">
+          <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+          </div>
+          <h3 class="font-semibold text-gray-900 mb-1">Assignments</h3>
+          <p class="text-sm text-gray-500">Homework & challenges</p>
+        </div>
+        
+        <div class="text-center p-6">
+          <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 class="font-semibold text-gray-900 mb-1">Check-ins</h3>
+          <p class="text-sm text-gray-500">Weekly sessions</p>
+        </div>
+        
+        <div class="text-center p-6">
+          <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mx-auto mb-4">
+            <svg class="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+          <h3 class="font-semibold text-gray-900 mb-1">Q&A</h3>
+          <p class="text-sm text-gray-500">Ask questions anytime</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- For Students Section -->
+  <section class="py-20 bg-slate-50">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16 fade-in">
+        <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">For Students</h2>
+        <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+          Get the guidance you need to level up your trading.
+        </p>
+      </div>
+      
+      <!-- Trade Reviews -->
+      <div class="grid lg:grid-cols-2 gap-12 items-center mb-20 fade-in">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-blue-100 text-blue-700 rounded-full px-3 py-1 text-sm font-medium mb-4">
+            Trade Reviews
+          </div>
+          <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">Flag Trades for Review</h3>
+          <p class="text-gray-600 mb-6">
+            Took a trade you're unsure about? Flag it for your mentor to review. They'll see your entry, exit, notes, and screenshot — everything they need to give you targeted feedback.
+          </p>
+          <ul class="space-y-3">
+            <li class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-gray-700">One-click flag for mentor review</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-gray-700">Add specific questions about the trade</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-gray-700">Get detailed written feedback</span>
+            </li>
+          </ul>
+        </div>
+        <div class="screenshot rounded-xl overflow-hidden border border-gray-200 bg-white">
+          <img src="https://placehold.co/600x400/ffffff/64748b?text=Trade+Review+Request" alt="Trade review request" class="w-full">
+        </div>
+      </div>
+      
+      <!-- Assignments -->
+      <div class="grid lg:grid-cols-2 gap-12 items-center mb-20 fade-in">
+        <div class="order-2 lg:order-1 screenshot rounded-xl overflow-hidden border border-gray-200 bg-white">
+          <img src="https://placehold.co/600x400/ffffff/64748b?text=Assignments+List" alt="Assignments list" class="w-full">
+        </div>
+        <div class="order-1 lg:order-2">
+          <div class="inline-flex items-center gap-2 bg-emerald-100 text-emerald-700 rounded-full px-3 py-1 text-sm font-medium mb-4">
+            Homework
+          </div>
+          <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">Receive Assignments</h3>
+          <p class="text-gray-600 mb-6">
+            Your mentor can assign specific tasks to help you work on weak spots. "Only trade breakouts this week" or "Paper trade 10 reversals" — structured practice that builds skills.
+          </p>
+          <ul class="space-y-3">
+            <li class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-gray-700">Custom assignments from your mentor</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-gray-700">Track completion progress</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-gray-700">Get graded with mentor feedback</span>
+            </li>
+          </ul>
+        </div>
+      </div>
+      
+      <!-- Weekly Check-ins -->
+      <div class="grid lg:grid-cols-2 gap-12 items-center fade-in">
+        <div>
+          <div class="inline-flex items-center gap-2 bg-purple-100 text-purple-700 rounded-full px-3 py-1 text-sm font-medium mb-4">
+            Accountability
+          </div>
+          <h3 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-4">Weekly Check-ins</h3>
+          <p class="text-gray-600 mb-6">
+            Schedule regular sessions with your mentor. Review your week, discuss challenges, set goals for next week. Consistent accountability is the secret to faster improvement.
+          </p>
+          <ul class="space-y-3">
+            <li class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-gray-700">Schedule recurring sessions</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-gray-700">Review weekly performance together</span>
+            </li>
+            <li class="flex items-center gap-3">
+              <svg class="w-5 h-5 text-emerald-500 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+              <span class="text-gray-700">Set goals and action items</span>
+            </li>
+          </ul>
+        </div>
+        <div class="screenshot rounded-xl overflow-hidden border border-gray-200 bg-white">
+          <img src="https://placehold.co/600x400/ffffff/64748b?text=Weekly+Check-in" alt="Weekly check-in" class="w-full">
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- For Mentors Section -->
+  <section class="py-20 bg-white">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16 fade-in">
+        <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-4">For Mentors</h2>
+        <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+          Everything you need to guide students effectively.
+        </p>
+      </div>
+      
+      <div class="grid md:grid-cols-2 lg:grid-cols-3 gap-8 fade-in">
+        <!-- Student Dashboard -->
+        <div class="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+          <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Student Dashboard</h3>
+          <p class="text-gray-600 text-sm">
+            View each student's performance at a glance. See their stats, recent trades, and progress toward goals without digging through data.
+          </p>
+        </div>
+        
+        <!-- Trade Review Queue -->
+        <div class="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+          <div class="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Review Queue</h3>
+          <p class="text-gray-600 text-sm">
+            All flagged trades from your students in one place. Work through them efficiently, leaving detailed feedback on each.
+          </p>
+        </div>
+        
+        <!-- Feedback Tools -->
+        <div class="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+          <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Feedback Tools</h3>
+          <p class="text-gray-600 text-sm">
+            Leave detailed comments, rate trade quality, and highlight specific areas for improvement. Your feedback is saved with the trade.
+          </p>
+        </div>
+        
+        <!-- Create Assignments -->
+        <div class="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+          <div class="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-purple-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Create Assignments</h3>
+          <p class="text-gray-600 text-sm">
+            Assign custom homework tailored to each student's needs. Set deadlines, track completion, and grade submissions.
+          </p>
+        </div>
+        
+        <!-- Progress Tracking -->
+        <div class="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+          <div class="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-red-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Progress Tracking</h3>
+          <p class="text-gray-600 text-sm">
+            Monitor student improvement over time. See if they're implementing your feedback and getting better results.
+          </p>
+        </div>
+        
+        <!-- Session Scheduling -->
+        <div class="bg-slate-50 rounded-2xl p-6 border border-slate-100">
+          <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-4">
+            <svg class="w-6 h-6 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </div>
+          <h3 class="text-lg font-semibold text-gray-900 mb-2">Session Scheduling</h3>
+          <p class="text-gray-600 text-sm">
+            Schedule one-on-one sessions with students. Keep track of upcoming meetings and past session notes.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- How It Works Section -->
+  <section class="py-20 bg-slate-900">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center mb-16 fade-in">
+        <h2 class="text-3xl sm:text-4xl font-bold text-white mb-4">How It Works</h2>
+        <p class="text-lg text-slate-400 max-w-2xl mx-auto">
+          Getting started with mentorship is simple.
+        </p>
+      </div>
+      
+      <div class="grid md:grid-cols-2 gap-12 fade-in">
+        <!-- Student Flow -->
+        <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
+          <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-3">
+            <span class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-sm">S</span>
+            Student Journey
+          </h3>
+          <div class="space-y-6">
+            <div class="flex gap-4">
+              <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-white text-sm font-bold">1</span>
+              </div>
+              <div>
+                <p class="text-white font-medium">Connect with a mentor</p>
+                <p class="text-slate-400 text-sm">Find a mentor and request to join their program</p>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-white text-sm font-bold">2</span>
+              </div>
+              <div>
+                <p class="text-white font-medium">Log trades as normal</p>
+                <p class="text-slate-400 text-sm">Your mentor can see your journal and progress</p>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-white text-sm font-bold">3</span>
+              </div>
+              <div>
+                <p class="text-white font-medium">Flag trades for review</p>
+                <p class="text-slate-400 text-sm">Get feedback on specific trades you're unsure about</p>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <div class="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-white text-sm font-bold">4</span>
+              </div>
+              <div>
+                <p class="text-white font-medium">Complete assignments</p>
+                <p class="text-slate-400 text-sm">Work on tasks assigned by your mentor</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Mentor Flow -->
+        <div class="bg-white/5 backdrop-blur-sm border border-white/10 rounded-2xl p-8">
+          <h3 class="text-xl font-bold text-white mb-6 flex items-center gap-3">
+            <span class="w-8 h-8 bg-emerald-600 rounded-lg flex items-center justify-center text-sm">M</span>
+            Mentor Journey
+          </h3>
+          <div class="space-y-6">
+            <div class="flex gap-4">
+              <div class="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-white text-sm font-bold">1</span>
+              </div>
+              <div>
+                <p class="text-white font-medium">Accept students</p>
+                <p class="text-slate-400 text-sm">Review requests and accept students into your program</p>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <div class="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-white text-sm font-bold">2</span>
+              </div>
+              <div>
+                <p class="text-white font-medium">Monitor progress</p>
+                <p class="text-slate-400 text-sm">View student dashboards and performance trends</p>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <div class="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-white text-sm font-bold">3</span>
+              </div>
+              <div>
+                <p class="text-white font-medium">Review flagged trades</p>
+                <p class="text-slate-400 text-sm">Provide detailed feedback on student trades</p>
+              </div>
+            </div>
+            <div class="flex gap-4">
+              <div class="w-8 h-8 bg-emerald-600 rounded-full flex items-center justify-center flex-shrink-0">
+                <span class="text-white text-sm font-bold">4</span>
+              </div>
+              <div>
+                <p class="text-white font-medium">Assign homework</p>
+                <p class="text-slate-400 text-sm">Create custom tasks to help students improve</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA Section -->
+  <section class="py-20 bg-gradient-to-b from-white to-slate-50">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 text-center fade-in">
+      <h2 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-6">
+        Ready to accelerate your learning?
+      </h2>
+      <p class="text-lg text-gray-600 mb-10">
+        Connect with a mentor and start improving faster today.
+      </p>
+      <a href="index.html" class="inline-block bg-blue-600 hover:bg-blue-500 text-white text-lg font-semibold px-10 py-4 rounded-xl transition-all hover:scale-105 shadow-lg shadow-blue-500/25">
+        Get Started Free
+      </a>
+      <p class="text-sm text-gray-500 mt-4">No credit card required</p>
+      
+      <div class="mt-16 pt-16 border-t border-gray-200">
+        <p class="text-sm text-gray-500 mb-6">Explore other features</p>
+        <div class="flex flex-wrap justify-center gap-4">
+          <a href="feature-trade-logging.html" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-gray-700 transition-colors">Trade Logging</a>
+          <a href="feature-dashboard.html" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-gray-700 transition-colors">Dashboard</a>
+          <a href="feature-calendar.html" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-gray-700 transition-colors">Calendar</a>
+          <a href="feature-goals.html" class="px-4 py-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-sm font-medium text-gray-700 transition-colors">Goals & Challenges</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="bg-slate-900 border-t border-white/10 py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-6">
+        <div class="flex items-center gap-2">
+          <span class="text-2xl font-extrabold"><span class="text-white">oh</span><span class="text-blue-400">Yaaa</span></span>
+          <span class="text-slate-500 text-sm ml-2">Trading Journal</span>
+        </div>
+        <div class="flex items-center gap-6">
+          <a href="index.html" class="text-slate-400 hover:text-white transition-colors text-sm">Log In</a>
+          <a href="index.html" class="text-slate-400 hover:text-white transition-colors text-sm">Sign Up</a>
+          <a href="/cdn-cgi/l/email-protection#ddaea8adadb2afa99db2b5a4bcbca9afbcb9b4b3bab7b2a8afb3bcb1f3beb2b0" class="text-slate-400 hover:text-white transition-colors text-sm">Contact</a>
+        </div>
+        <p class="text-slate-500 text-sm">© 2026 ohYaaa Trading Journal. All rights reserved.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script data-cfasync="false" src="/cdn-cgi/scripts/5c5dd728/cloudflare-static/email-decode.min.js"></script><script>
+    const observerOptions = { threshold: 0.1, rootMargin: '0px 0px -50px 0px' };
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => { if (entry.isIntersecting) entry.target.
