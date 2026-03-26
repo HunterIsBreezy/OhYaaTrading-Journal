@@ -198,7 +198,7 @@ export default function TradeModal({ isOpen, onClose, trade, state, setState }) 
     if (!file) return;
     if (!file.type.startsWith('image/')) { alert('Please upload an image file.'); return; }
     try {
-      const compressedBase64 = await compressImage(file, 200 * 1024);
+      const compressedBase64 = await compressImage(file, 80 * 1024);
       handleChange('screenshot', compressedBase64);
     } catch (error) {
       alert(error.message);
@@ -216,28 +216,28 @@ export default function TradeModal({ isOpen, onClose, trade, state, setState }) 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
         let { width, height } = img;
-        const maxDim = 1920;
+        const maxDim = 1200;
         if (width > maxDim || height > maxDim) {
           if (width > height) { height = Math.round((height * maxDim) / width); width = maxDim; }
           else { width = Math.round((width * maxDim) / height); height = maxDim; }
         }
         const tryCompress = (w, h, q) => {
           canvas.width = w; canvas.height = h;
-          ctx.fillStyle = '#FFFFFF'; ctx.fillRect(0, 0, w, h);
+          ctx.fillStyle = '#000000'; ctx.fillRect(0, 0, w, h);
           ctx.drawImage(img, 0, 0, w, h);
           const base64 = canvas.toDataURL('image/jpeg', q);
           const sizeBytes = Math.round((base64.length - 'data:image/jpeg;base64,'.length) * 0.75);
           return { base64, sizeBytes };
         };
-        let cw = width, ch = height, q = 0.9;
+        let cw = width, ch = height, q = 0.7;
         let result = tryCompress(cw, ch, q);
         while (result.sizeBytes > maxSizeBytes && q > 0.1) { q -= 0.1; result = tryCompress(cw, ch, q); }
         while (result.sizeBytes > maxSizeBytes && cw > 200) {
-          cw = Math.round(cw * 0.8); ch = Math.round(ch * 0.8); q = 0.8;
+          cw = Math.round(cw * 0.75); ch = Math.round(ch * 0.75); q = 0.6;
           result = tryCompress(cw, ch, q);
           while (result.sizeBytes > maxSizeBytes && q > 0.1) { q -= 0.1; result = tryCompress(cw, ch, q); }
         }
-        if (result.sizeBytes > maxSizeBytes) reject(new Error('Unable to compress image below 200KB. Please use a smaller image.'));
+        if (result.sizeBytes > maxSizeBytes) reject(new Error('Unable to compress image below 80KB. Please use a smaller image.'));
         else resolve(result.base64);
       };
       img.onerror = () => reject(new Error('Failed to load image'));
